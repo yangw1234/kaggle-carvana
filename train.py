@@ -2,6 +2,7 @@ import tensorflow as tf
 from input import *
 from model import *
 from preprocessing import *
+from models.unet import *
 
 import matplotlib.pyplot as plt
 
@@ -44,36 +45,41 @@ is_training = tf.placeholder(tf.bool)
 raw_image_batch = tf.cond(is_training, lambda: training_image_batch, lambda: validation_image_batch)
 raw_mask_batch = tf.cond(is_training, lambda: training_mask_batch, lambda: validation_mask_batch)
 
-image_batch, mask_batch = propressing(raw_image_batch, raw_mask_batch, (320, 480))
+image_batch, mask_batch = propressing(raw_image_batch, raw_mask_batch, (1024, 1024))
 
-mask_batch = tf.squeeze(mask_batch, axis=3)
+# mask_batch = tf.squeeze(mask_batch, axis=3)
 
-output = model(image_batch, is_training, scope="Model")
+# output = model(image_batch, is_training, scope="Model")
+
+output = uNet(image_batch, is_training)
 
 with tf.name_scope("Predictions"):
-    softmax = tf.nn.softmax(output)
-    pred = softmax[:,:,:,1:2]
+    pred = tf.nn.sigmoid(output)
     final_pred = tf.image.resize_bilinear(pred, [1280, 1918])
     final_mask = tf.to_float(tf.div(raw_mask_batch, 255))
     inter = tf.reduce_sum(final_pred * final_mask)
-    val_dice_coff = (2.0 * tf.to_float(inter) + 1.0) / (tf.to_float(tf.reduce_sum(final_pred)) + tf.to_float(tf.reduce_sum(final_mask)) + 1.0)
+    dice_coff = (2.0 * tf.to_float(inter) + 1.0) / (tf.to_float(tf.reduce_sum(final_pred)) + tf.to_float(tf.reduce_sum(final_mask)) + 1.0)
 
 
 
 with tf.name_scope("Loss"):
-    loss = tf.reduce_mean(tf.losses.sparse_softmax_cross_entropy(logits=output, labels=mask_batch))
-    all_loss = 0.5 * loss - val_dice_coff
+    loss_pred = tf.nn.sigmoid(output)
+    true_y = tf.cast(mask_batch, tf.float32)
+    intersection = tf.reduce_sum(true_y * loss_pred)
+    dice_coff_loss = 1 - (2. * intersection + 1.0) / (tf.reduce_sum(true_y) + tf.reduce_sum(loss_pred) + 1.0)
+    bce_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=output, labels=true_y))
+    all_loss = bce_loss + dice_coff_loss
 
 
 starter_learning_rate = 0.01
 learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
-                                           100, 0.5, staircase=True)
+                                           100, 0.7)
 
 train_op = tf.train.AdamOptimizer(learning_rate).minimize(all_loss, global_step=global_step)
 
 with tf.name_scope("Summary"):
-    tf.summary.scalar('training_loss', loss)
-    tf.summary.scalar('training_dice_coff', val_dice_coff)
+    tf.summary.scalar('training_loss', all_loss)
+    tf.summary.scalar('training_dice_coff', dice_coff)
     tf.summary.scalar('learning_rate', learning_rate)
 
     summary_op = tf.summary.merge_all()
@@ -98,12 +104,12 @@ with tf.Session() as sess:
 
     for index in range(initial_step, n_batches * n_epoches):
         # Retrieve a single instance:
-        _, l, d, summary, p, m = sess.run([train_op, loss, val_dice_coff, summary_op, pred, mask_batch], feed_dict={is_training: True})
+        _, l, d, summary, p, m = sess.run([train_op, all_loss, dice_coff, summary_op, pred, mask_batch], feed_dict={is_training: True})
         print "step: %s, loss: %s, dice_coff: %s" % (index, l, d)
 
         if (index + 1) % 20 == 0:
             saver.save(sess, "./checkpoints/carvana", index)
-            d_val, prediction, groud_truth = sess.run([val_dice_coff, final_pred, final_mask], feed_dict={is_training: False})
+            d_val, prediction, groud_truth = sess.run([dice_coff, final_pred, final_mask], feed_dict={is_training: False})
             print "validation, step: %s, dice_coff: %s" % (index, d_val)
             # fig, ax = plt.subplots(1, 2)
             # ax[0].imshow(prediction[0, :, :, 0] > 0.5, cmap='gray')

@@ -5,8 +5,8 @@ from preprocessing import *
 from rle import *
 import logging
 import time
+from models.unet import *
 
-import matplotlib.pyplot as plt
 
 logging.basicConfig(level=logging.DEBUG,
                 format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.DEBUG,
                 filename='eval.log',
                 filemode='w')
 
-batch_size = 16
+batch_size = 8
 min_after_dequeue = 10
 capacity = 200
 
@@ -32,13 +32,12 @@ with tf.name_scope("Testing_Data"):
 
 is_training = False
 
-image_batch = propressing_for_test(test_image_batch, (160, 240))
+image_batch = propressing_for_test(test_image_batch, (1024, 1024))
 
-output = model(image_batch, is_training, scope="Model")
+output = uNet(image_batch, True)
 
 with tf.name_scope("Predictions"):
-    softmax = tf.nn.softmax(output)
-    pred = softmax[:,:,:,1:2]
+    pred = tf.nn.sigmoid(output)
     final_pred = tf.image.resize_bilinear(pred, [1280, 1918])
 
 with tf.Session() as sess:
@@ -48,7 +47,7 @@ with tf.Session() as sess:
 
     saver = tf.train.Saver()
 
-    ckpt = tf.train.get_checkpoint_state("./checkpoints_160_240")
+    ckpt = tf.train.get_checkpoint_state("./checkpoints")
 
     if ckpt and ckpt.model_checkpoint_path:
         saver.restore(sess, ckpt.model_checkpoint_path)

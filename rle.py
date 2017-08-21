@@ -1,6 +1,5 @@
 # Import libraries
 import numpy as np  # linear algebra
-from PIL import Image
 from input import *
 
 
@@ -30,7 +29,7 @@ def rle(img, name):
 # print len(lengths)
 
 
-files = get_train_image_files()
+# files = get_train_image_files()
 
 # directory = "/home/yang/datasets/kaggle-carvana/data/train_masks/"
 #

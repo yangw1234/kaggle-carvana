@@ -52,6 +52,12 @@ def resize_image(image, size, data_format):
         image = tf.image.resize_bilinear(image, size=size)
     return image
 
+def resize_image_and_transpose(image, size, data_format):
+    image = tf.image.resize_bilinear(image, size=size)
+    if data_format == "NCHW":
+        image = tf.transpose(image, perm=[0, 3, 2, 1])
+    return image
+
 
 def uNet(inputs, has_batch_norm, data_format):
 

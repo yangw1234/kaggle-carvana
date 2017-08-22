@@ -39,7 +39,7 @@ def read_images_from_disk(input_queue):
 
     return image, mask
 
-def get_image_and_label(ids_train, data_format):
+def get_image_and_label(ids_train):
     num = 16
     images = []
     masks = []
@@ -54,10 +54,6 @@ def get_image_and_label(ids_train, data_format):
     input_queue = tf.train.slice_input_producer([image_tensor, mask_tensor])
 
     image, mask = read_images_from_disk(input_queue)
-
-    if data_format == "NCHW":
-        image = tf.transpose(image, perm=[2, 1, 0])
-        mask = tf.transpose(mask, perm=[2, 1, 0])
 
     return image, mask
 

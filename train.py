@@ -62,6 +62,8 @@ output = uNet(image_batch, has_batch_norm=True, data_format=DATA_FORMAT)
 with tf.name_scope("Predictions"):
         pred = tf.nn.sigmoid(output)
         final_pred = resize_image(pred, [1280, 1918], DATA_FORMAT)
+        if DATA_FORMAT == "NCHW":
+            raw_image_batch = tf.transpose(raw_image_batch, perm=[0, 3, 2, 1])
         final_mask = tf.to_float(raw_mask_batch)
         inter = tf.reduce_sum(final_pred * final_mask)
         dice_coff = (2.0 * tf.to_float(inter) + 1.0) / (tf.to_float(tf.reduce_sum(final_pred)) + tf.to_float(tf.reduce_sum(final_mask)) + 1.0)

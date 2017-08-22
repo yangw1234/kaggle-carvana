@@ -117,8 +117,6 @@ with tf.Session(config=tf.ConfigProto(log_device_placement=False)) as sess:
 
     writer = tf.summary.FileWriter("./graph", sess.graph)
 
-    exit()
-
     ckpt = tf.train.get_checkpoint_state("./checkpoints")
 
     if ckpt and ckpt.model_checkpoint_path:

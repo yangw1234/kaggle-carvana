@@ -18,6 +18,8 @@ batch_size = 8
 min_after_dequeue = 10
 capacity = 200
 
+DATA_FORMAT = "NCHW"
+
 files = get_test_image_files()
 
 test_size = len(files)
@@ -32,13 +34,13 @@ with tf.name_scope("Testing_Data"):
 
 is_training = False
 
-image_batch = propressing_for_test(test_image_batch, (1024, 1024))
+image_batch = propressing_for_test(test_image_batch, [1024, 1024], data_format=DATA_FORMAT)
 
-output = uNet(image_batch, True)
+output = uNet(image_batch, has_batch_norm=True, data_format=DATA_FORMAT)
 
 with tf.name_scope("Predictions"):
     pred = tf.nn.sigmoid(output)
-    final_pred = tf.image.resize_bilinear(pred, [1280, 1918])
+    final_pred = resize_image(pred, [1280, 1918], data_format=DATA_FORMAT)
 
 with tf.Session() as sess:
     # Start populating the filename queue.
@@ -60,7 +62,7 @@ with tf.Session() as sess:
         start_time = time.time()
         pred, file = sess.run([final_pred, file_name])
         for i in range(0, batch_size):
-            line = rle(pred[i, :, :, 0], file[i].split("/")[-1])
+            line = rle(pred[i, 0, :, :], file[i].split("/")[-1])
             submission_file.writelines(line + "\n")
         logging.info("num: %s batch, total %s batches, using %s seconds" % (index, n_batches, (time.time() - start_time)))
 

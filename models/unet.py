@@ -1,171 +1,110 @@
 import tensorflow as tf
 from tensorflow.python.ops import variable_scope
 
+def down_layer(inputs, filters, kernel_size, has_batch_norm, has_pool, data_format):
+    if data_format == "NHWC":
+        channels_order = "channels_last"
+    else:
+        channels_order = "channels_first"
 
-def uNet(inputs, is_training):
-    with variable_scope.variable_scope("Unet_1024", 'Unet_1024', [inputs]):
-        down0b = tf.layers.conv2d(inputs, 8, 3, padding="same")
-        down0b = tf.layers.batch_normalization(down0b, training=is_training)
-        down0b = tf.nn.relu(down0b)
-        down0b = tf.layers.conv2d(down0b, 8, 3, padding="same")
-        down0b = tf.layers.batch_normalization(down0b, training=is_training)
-        down0b = tf.nn.relu(down0b)
-        down0b_pool = tf.layers.max_pooling2d(down0b, 2, 2, padding="valid")
+    down = tf.layers.conv2d(inputs, filters, kernel_size, padding="same", data_format=channels_order)
+    if has_batch_norm:
+        down = tf.contrib.layers.batch_norm(down, fused=True, data_format=data_format)
+    down = tf.nn.relu(down)
+    down = tf.layers.conv2d(down, filters, kernel_size, padding="same", data_format=channels_order)
+    if has_batch_norm:
+        down = tf.contrib.layers.batch_norm(down, fused=True, data_format=data_format)
+    down = tf.nn.relu(down)
+    if has_pool:
+        down_pool = tf.layers.max_pooling2d(down, 2, 2, padding="valid", data_format=channels_order)
+    else:
+        down_pool = None
+    return down, down_pool
+
+def up_layer(ups, downs, filters, kernel_size, output_size, has_batch_norm, data_format):
+    if data_format == "NHWC":
+        channels_order = "channels_last"
+        channel_dim = 3
+    else:
+        channels_order = "channels_first"
+        channel_dim = 1
+
+    ups = resize_image(ups, size=output_size, data_format=data_format)
+    ups = tf.concat([ups, downs], axis=channel_dim)
+
+    ups = tf.layers.conv2d(ups, filters, kernel_size, padding="same", data_format=channels_order)
+    if has_batch_norm:
+        ups = tf.contrib.layers.batch_norm(ups, fused=True, data_format=data_format)
+    ups = tf.nn.relu(ups)
+
+    ups = tf.layers.conv2d(ups, filters, kernel_size, padding="same", data_format=channels_order)
+    if has_batch_norm:
+        ups = tf.contrib.layers.batch_norm(ups, fused=True, data_format=data_format)
+    ups = tf.nn.relu(ups)
+    return ups
+
+def resize_image(image, size, data_format):
+    if data_format == "NCHW":
+        image = tf.transpose(image, perm=[0, 3, 2, 1])
+        image = tf.image.resize_bilinear(image, size=size)
+        image = tf.transpose(image, perm=[0, 3, 2, 1])
+    else:
+        image = tf.image.resize_bilinear(image, size=size)
+    return image
+
+
+def uNet(inputs, has_batch_norm, data_format):
+
+    with variable_scope.variable_scope("Unet", 'Unet', [inputs]):
+
+        down0b, down0b_pool = down_layer(inputs, 8, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
         # 512
 
-        down0a = tf.layers.conv2d(down0b_pool, 16, 3, padding="same")
-        down0a = tf.layers.batch_normalization(down0a, training=is_training)
-        down0a = tf.nn.relu(down0a)
-        down0a = tf.layers.conv2d(down0a, 16, 3, padding="same")
-        down0a = tf.layers.batch_normalization(down0a, training=is_training)
-        down0a = tf.nn.relu(down0a)
-        down0a_pool = tf.layers.max_pooling2d(down0a, 2, 2, padding="valid")
+        down0a, down0a_pool = down_layer(down0b_pool, 16, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
         # 256
 
-        down0 = tf.layers.conv2d(down0a_pool, 32, 3, padding="same")
-        down0 = tf.layers.batch_normalization(down0, training=is_training)
-        down0 = tf.nn.relu(down0)
-        down0 = tf.layers.conv2d(down0, 32, 3, padding="same")
-        down0 = tf.layers.batch_normalization(down0, training=is_training)
-        down0 = tf.nn.relu(down0)
-        down0_pool = tf.layers.max_pooling2d(down0, 2, 2, padding="valid")
+        down0, down0_pool = down_layer(down0a_pool, 32, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
         # 128
 
-        down1 = tf.layers.conv2d(down0_pool, 64, 3, padding="same")
-        down1 = tf.layers.batch_normalization(down1, training=is_training)
-        down1 = tf.nn.relu(down1)
-        down1 = tf.layers.conv2d(down1, 64, 3, padding="same")
-        down1 = tf.layers.batch_normalization(down1, training=is_training)
-        down1 = tf.nn.relu(down1)
-        down1_pool = tf.layers.max_pooling2d(down1, 2, 2, padding="valid")
+        down1, down1_pool = down_layer(down0_pool, 64, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
         # 64
 
-        down2 = tf.layers.conv2d(down1_pool, 128, 3, padding="same")
-        down2 = tf.layers.batch_normalization(down2, training=is_training)
-        down2 = tf.nn.relu(down2)
-        down2 = tf.layers.conv2d(down2, 128, 3, padding="same")
-        down2 = tf.layers.batch_normalization(down2, training=is_training)
-        down2 = tf.nn.relu(down2)
-        down2_pool = tf.layers.max_pooling2d(down2, 2, 2, padding="valid")
+        down2, down2_pool = down_layer(down1_pool, 128, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
         # 32
 
-        down3 = tf.layers.conv2d(down2_pool, 256, 3, padding="same")
-        down3 = tf.layers.batch_normalization(down3, training=is_training)
-        down3 = tf.nn.relu(down3)
-        down3 = tf.layers.conv2d(down3, 256, 3, padding="same")
-        down3 = tf.layers.batch_normalization(down3, training=is_training)
-        down3 = tf.nn.relu(down3)
-        down3_pool = tf.layers.max_pooling2d(down3, 2, 2, padding="valid")
+        down3, down3_pool = down_layer(down2_pool, 256, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
         # 16
 
-        down4 = tf.layers.conv2d(down3_pool, 512, 3, padding="same")
-        down4 = tf.layers.batch_normalization(down4, training=is_training)
-        down4 = tf.nn.relu(down4)
-        down4 = tf.layers.conv2d(down4, 512, 3, padding="same")
-        down4 = tf.layers.batch_normalization(down4, training=is_training)
-        down4 = tf.nn.relu(down4)
-        down4_pool = tf.layers.max_pooling2d(down4, 2, 2, padding="valid")
+        down4, down4_pool = down_layer(down3_pool, 512, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
         # 8
 
-        center = tf.layers.conv2d(down4_pool, 1024, 3, padding="same")
-        center = tf.layers.batch_normalization(center, training=is_training)
-        center = tf.nn.relu(center)
-        center = tf.layers.conv2d(center, 1024, 3, padding="same")
-        center = tf.layers.batch_normalization(center, training=is_training)
-        center = tf.nn.relu(center)
+        center, _ = down_layer(down4_pool, 1024, 3, has_batch_norm=has_batch_norm, has_pool=False, data_format=data_format)
         # center
 
-        up4 = tf.image.resize_nearest_neighbor(center, [16, 16])
-        up4 = tf.concat([up4, down4], axis=3)
-        up4 = tf.layers.conv2d(up4, 512, 3, padding="same")
-        up4 = tf.layers.batch_normalization(up4, training=is_training)
-        up4 = tf.nn.relu(up4)
-        up4 = tf.layers.conv2d(up4, 512, 3, padding="same")
-        up4 = tf.layers.batch_normalization(up4, training=is_training)
-        up4 = tf.nn.relu(up4)
-        up4 = tf.layers.conv2d(up4, 512, 3, padding="same")
-        up4 = tf.layers.batch_normalization(up4, training=is_training)
-        up4 = tf.nn.relu(up4)
+        up4 = up_layer(center, down4, 512, 3, [16, 16], has_batch_norm=has_batch_norm, data_format=data_format)
         # 16
 
-        up3 = tf.image.resize_nearest_neighbor(up4, [32, 32])
-        up3 = tf.concat([up3, down3], axis=3)
-        up3 = tf.layers.conv2d(up3, 256, 3, padding="same")
-        up3 = tf.layers.batch_normalization(up3, training=is_training)
-        up3 = tf.nn.relu(up3)
-        up3 = tf.layers.conv2d(up3, 256, 3, padding="same")
-        up3 = tf.layers.batch_normalization(up3, training=is_training)
-        up3 = tf.nn.relu(up3)
-        up3 = tf.layers.conv2d(up3, 256, 3, padding="same")
-        up3 = tf.layers.batch_normalization(up3, training=is_training)
-        up3 = tf.nn.relu(up3)
+        up3 = up_layer(up4, down3, 256, 3, [32, 32], has_batch_norm=has_batch_norm, data_format=data_format)
         # 32
 
-        up2 = tf.image.resize_nearest_neighbor(up3, [64, 64])
-        up2 = tf.concat([up2, down2], axis=3)
-        up2 = tf.layers.conv2d(up2, 128, 3, padding="same")
-        up2 = tf.layers.batch_normalization(up2, training=is_training)
-        up2 = tf.nn.relu(up2)
-        up2 = tf.layers.conv2d(up2, 128, 3, padding="same")
-        up2 = tf.layers.batch_normalization(up2, training=is_training)
-        up2 = tf.nn.relu(up2)
-        up2 = tf.layers.conv2d(up2, 128, 3, padding="same")
-        up2 = tf.layers.batch_normalization(up2, training=is_training)
-        up2 = tf.nn.relu(up2)
+        up2 = up_layer(up3, down2, 128, 3, [64, 64], has_batch_norm=has_batch_norm, data_format=data_format)
         # 64
 
-        up1 = tf.image.resize_nearest_neighbor(up2, [128, 128])
-        up1 = tf.concat([up1, down1], axis=3)
-        up1 = tf.layers.conv2d(up1, 64, 3, padding="same")
-        up1 = tf.layers.batch_normalization(up1, training=is_training)
-        up1 = tf.nn.relu(up1)
-        up1 = tf.layers.conv2d(up1, 64, 3, padding="same")
-        up1 = tf.layers.batch_normalization(up1, training=is_training)
-        up1 = tf.nn.relu(up1)
-        up1 = tf.layers.conv2d(up1, 64, 3, padding="same")
-        up1 = tf.layers.batch_normalization(up1, training=is_training)
-        up1 = tf.nn.relu(up1)
+        up1 = up_layer(up2, down1, 64, 3, [128, 128], has_batch_norm=has_batch_norm, data_format=data_format)
         # 128
 
-        up0 = tf.image.resize_nearest_neighbor(up1, [256, 256])
-        up0 = tf.concat([up0, down0], axis=3)
-        up0 = tf.layers.conv2d(up0, 32, 3, padding="same")
-        up0 = tf.layers.batch_normalization(up0, training=is_training)
-        up0 = tf.nn.relu(up0)
-        up0 = tf.layers.conv2d(up0, 32, 3, padding="same")
-        up0 = tf.layers.batch_normalization(up0, training=is_training)
-        up0 = tf.nn.relu(up0)
-        up0 = tf.layers.conv2d(up0, 32, 3, padding="same")
-        up0 = tf.layers.batch_normalization(up0, training=is_training)
-        up0 = tf.nn.relu(up0)
+        up0 = up_layer(up1, down0, 32, 3, [256, 256], has_batch_norm=has_batch_norm, data_format=data_format)
         # 256
 
-        up0a = tf.image.resize_nearest_neighbor(up0, [512, 512])
-        up0a = tf.concat([up0a, down0a], axis=3)
-        up0a = tf.layers.conv2d(up0a, 16, 3, padding="same")
-        up0a = tf.layers.batch_normalization(up0a, training=is_training)
-        up0a = tf.nn.relu(up0a)
-        up0a = tf.layers.conv2d(up0a, 16, 3, padding="same")
-        up0a = tf.layers.batch_normalization(up0a, training=is_training)
-        up0a = tf.nn.relu(up0a)
-        up0a = tf.layers.conv2d(up0a, 16, 3, padding="same")
-        up0a = tf.layers.batch_normalization(up0a, training=is_training)
-        up0a = tf.nn.relu(up0a)
+        up0a = up_layer(up0, down0a, 16, 3, [512, 512], has_batch_norm=has_batch_norm, data_format=data_format)
         # 512
 
-        up0b = tf.image.resize_nearest_neighbor(up0a, [1024, 1024])
-        up0b = tf.concat([up0b, down0b], axis=3)
-        up0b = tf.layers.conv2d(up0b, 8, 3, padding="same")
-        up0b = tf.layers.batch_normalization(up0b, training=is_training)
-        up0b = tf.nn.relu(up0b)
-        up0b = tf.layers.conv2d(up0b, 8, 3, padding="same")
-        up0b = tf.layers.batch_normalization(up0b, training=is_training)
-        up0b = tf.nn.relu(up0b)
-        up0b = tf.layers.conv2d(up0b, 8, 3, padding="same")
-        up0b = tf.layers.batch_normalization(up0b, training=is_training)
-        up0b = tf.nn.relu(up0b)
+        up0b = up_layer(up0a, down0b, 8, 3, [1024, 1024], has_batch_norm=has_batch_norm, data_format=data_format)
         # 1024
 
-        classify = tf.layers.conv2d(up0b, 1, 1)
+        if data_format == "NCHW":
+            classify = tf.layers.conv2d(up0b, 1, 1, data_format="channels_first")
+        else:
+            classify = tf.layers.conv2d(up0b, 1, 1, data_format="channels_last")
 
     return classify

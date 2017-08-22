@@ -2,20 +2,22 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
+DATA_DIR = "/home/yang/datasets/kaggle-carvana/"
+
 def get_image_ids():
-    file_name = "./data/train_masks.csv"
+    file_name = DATA_DIR + "data/train_masks.csv"
     df_mask = pd.read_csv(file_name, usecols=['img'])
     ids_train = df_mask['img'].map(lambda s: s.split('_')[0]).unique()
     return ids_train
 
 def get_test_image_files():
-    file_name = "./data/sample_submission.csv"
+    file_name = DATA_DIR + "data/sample_submission.csv"
     df_mask = pd.read_csv(file_name, usecols=['img'])
     files = df_mask['img']
     return files
 
 def get_train_image_files():
-    file_name = "./data/train_masks.csv"
+    file_name = DATA_DIR + "data/train_masks.csv"
     df_mask = pd.read_csv(file_name, usecols=['img'])
     files = df_mask['img'].map(lambda s: s.split('.')[0])
     return files
@@ -37,14 +39,14 @@ def read_images_from_disk(input_queue):
 
     return image, mask
 
-def get_image_and_label(ids_train):
+def get_image_and_label(ids_train, data_format):
     num = 16
     images = []
     masks = []
     for im in ids_train:
         for idx in range(1, num + 1):
-            images.append('./data/train/{}_{:02d}.jpg'.format(im, idx))
-            masks.append('./data/train_masks/{}_{:02d}_mask.gif'.format(im, idx))
+            images.append(DATA_DIR + 'data/train/{}_{:02d}.jpg'.format(im, idx))
+            masks.append(DATA_DIR + 'data/train_masks/{}_{:02d}_mask.gif'.format(im, idx))
 
     image_tensor = tf.convert_to_tensor(images)
     mask_tensor = tf.convert_to_tensor(masks)
@@ -53,12 +55,16 @@ def get_image_and_label(ids_train):
 
     image, mask = read_images_from_disk(input_queue)
 
+    if data_format == "NCHW":
+        image = tf.transpose(image, perm=[2, 1, 0])
+        mask = tf.transpose(mask, perm=[2, 1, 0])
+
     return image, mask
 
 def get_test_image(files):
     images = []
     for im in files:
-        images.append('./data/test/' + im)
+        images.append(DATA_DIR + 'data/test/' + im)
 
     image_tensor = tf.convert_to_tensor(images)
     input_queue = tf.train.slice_input_producer([image_tensor], shuffle=False)

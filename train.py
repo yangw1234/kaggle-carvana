@@ -32,30 +32,31 @@ n_epoches = 40
 
 global_step = tf.Variable(0, dtype=tf.int32, trainable=False, name='global_step')
 
-# get training data
-with tf.name_scope("Training_Data"):
-    training_image, training_mask = get_image_and_label(training_ids)
-    training_image, training_mask = propressing(training_image, training_mask, True)
-    training_image_batch, training_mask_batch = tf.train.shuffle_batch([training_image, training_mask],
-                                                 batch_size=batch_size,
-                                                 min_after_dequeue=min_after_dequeue,
-                                                 capacity=capacity, num_threads=4)
+with tf.device("cpu:0"):
+    # get training data
+    with tf.name_scope("Training_Data"):
+        training_image, training_mask = get_image_and_label(training_ids)
+        training_image, training_mask = propressing(training_image, training_mask, True)
+        training_image_batch, training_mask_batch = tf.train.shuffle_batch([training_image, training_mask],
+                                                     batch_size=batch_size,
+                                                     min_after_dequeue=min_after_dequeue,
+                                                     capacity=capacity, num_threads=4)
 
-# get validation data
-with tf.name_scope("Validation_Data"):
-    validation_image, validation_mask = get_image_and_label(validation_ids)
-    validation_image, validation_mask = propressing(validation_image, validation_mask, False)
-    validation_image_batch, validation_mask_batch = tf.train.batch([validation_image, validation_mask],
-                                                 batch_size=batch_size,
-                                                 capacity=capacity)
+    # get validation data
+    with tf.name_scope("Validation_Data"):
+        validation_image, validation_mask = get_image_and_label(validation_ids)
+        validation_image, validation_mask = propressing(validation_image, validation_mask, False)
+        validation_image_batch, validation_mask_batch = tf.train.batch([validation_image, validation_mask],
+                                                     batch_size=batch_size,
+                                                     capacity=capacity)
 
-is_training = tf.placeholder(tf.bool)
+    is_training = tf.placeholder(tf.bool)
 
-raw_image_batch = tf.cond(is_training, lambda: training_image_batch, lambda: validation_image_batch)
-raw_mask_batch = tf.cond(is_training, lambda: training_mask_batch, lambda: validation_mask_batch)
+    raw_image_batch = tf.cond(is_training, lambda: training_image_batch, lambda: validation_image_batch)
+    raw_mask_batch = tf.cond(is_training, lambda: training_mask_batch, lambda: validation_mask_batch)
 
-image_batch = resize_image_and_transpose(raw_image_batch, size=[1024, 1024], data_format=DATA_FORMAT)
-mask_batch = resize_image_and_transpose(raw_mask_batch, size=[1024, 1024], data_format=DATA_FORMAT)
+    image_batch = resize_image_and_transpose(raw_image_batch, size=[1024, 1024], data_format=DATA_FORMAT)
+    mask_batch = resize_image_and_transpose(raw_mask_batch, size=[1024, 1024], data_format=DATA_FORMAT)
 
 output = uNet(image_batch, has_batch_norm=True, data_format=DATA_FORMAT)
 

@@ -18,7 +18,7 @@ def down_layer(inputs, filters, kernel_size, has_batch_norm, has_pool, data_form
         down = tf.contrib.layers.batch_norm(down, fused=True, data_format=data_format)
     down = tf.nn.relu(down)
     if has_pool:
-        down_pool = tf.layers.max_pooling2d(down, 2, 2, padding="valid", data_format=channels_order)
+        down_pool = slim.max_pooling2d(down, 2, 2, padding="valid", data_format=data_format)
     else:
         down_pool = None
     return down, down_pool
@@ -34,12 +34,12 @@ def up_layer(ups, downs, filters, kernel_size, output_size, has_batch_norm, data
     ups = resize_image(ups, size=output_size, data_format=data_format)
     ups = tf.concat([ups, downs], axis=channel_dim)
 
-    ups = tf.layers.conv2d(ups, filters, kernel_size, padding="same", data_format=channels_order)
+    ups = slim.conv2d(ups, filters, kernel_size, padding="same", data_format=data_format)
     if has_batch_norm:
         ups = tf.contrib.layers.batch_norm(ups, fused=True, data_format=data_format)
     ups = tf.nn.relu(ups)
 
-    ups = tf.layers.conv2d(ups, filters, kernel_size, padding="same", data_format=channels_order)
+    ups = slim.conv2d(ups, filters, kernel_size, padding="same", data_format=data_format)
     if has_batch_norm:
         ups = tf.contrib.layers.batch_norm(ups, fused=True, data_format=data_format)
     ups = tf.nn.relu(ups)
@@ -110,9 +110,6 @@ def uNet(inputs, has_batch_norm, data_format):
         # up0b = up_layer(up0a, down0b, 8, 3, [1024, 1024], has_batch_norm=has_batch_norm, data_format=data_format)
         # 1024
 
-        if data_format == "NCHW":
-            classify = tf.layers.conv2d(up0, 1, 1, data_format="channels_first")
-        else:
-            classify = tf.layers.conv2d(up0, 1, 1, data_format="channels_last")
+        classify = slim.conv2d(up0, 1, 1, data_format=data_format)
 
     return classify

@@ -65,51 +65,51 @@ def uNet(inputs, has_batch_norm, data_format):
 
     with variable_scope.variable_scope("Unet", 'Unet', [inputs]):
 
-        # down0b, down0b_pool = down_layer(inputs, 8, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down0b, down0b_pool = down_layer(inputs, 8, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
         # 512
 
-        # down0a, down0a_pool = down_layer(down0b_pool, 16, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down0a, down0a_pool = down_layer(down0b_pool, 16, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
         # 256
 
-        down0, down0_pool = down_layer(inputs, 16, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down0, down0_pool = down_layer(down0a_pool, 32, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
         # 128
 
-        down1, down1_pool = down_layer(down0_pool, 32, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down1, down1_pool = down_layer(down0_pool, 64, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
         # 64
 
-        down2, down2_pool = down_layer(down1_pool, 64, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down2, down2_pool = down_layer(down1_pool, 128, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
         # 32
 
-        down3, down3_pool = down_layer(down2_pool, 128, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down3, down3_pool = down_layer(down2_pool, 256, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
         # 16
 
-        down4, down4_pool = down_layer(down3_pool, 256, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down4, down4_pool = down_layer(down3_pool, 512, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
         # 8
 
-        center, _ = down_layer(down4_pool, 512, 3, has_batch_norm=has_batch_norm, has_pool=False, data_format=data_format)
+        center, _ = down_layer(down4_pool, 1024, 3, has_batch_norm=has_batch_norm, has_pool=False, data_format=data_format)
         # center
 
-        up4 = up_layer(center, down4, 256, 3, [64, 64], has_batch_norm=has_batch_norm, data_format=data_format)
+        up4 = up_layer(center, down4, 512, 3, [16, 16], has_batch_norm=has_batch_norm, data_format=data_format)
         # 16
 
-        up3 = up_layer(up4, down3, 128, 3, [128, 128], has_batch_norm=has_batch_norm, data_format=data_format)
+        up3 = up_layer(up4, down3, 256, 3, [32, 32], has_batch_norm=has_batch_norm, data_format=data_format)
         # 32
 
-        up2 = up_layer(up3, down2, 64, 3, [256, 256], has_batch_norm=has_batch_norm, data_format=data_format)
+        up2 = up_layer(up3, down2, 128, 3, [64, 64], has_batch_norm=has_batch_norm, data_format=data_format)
         # 64
 
-        up1 = up_layer(up2, down1, 32, 3, [512, 512], has_batch_norm=has_batch_norm, data_format=data_format)
+        up1 = up_layer(up2, down1, 64, 3, [128, 128], has_batch_norm=has_batch_norm, data_format=data_format)
         # 128
 
-        up0 = up_layer(up1, down0, 16, 3, [1024, 1024], has_batch_norm=has_batch_norm, data_format=data_format)
+        up0 = up_layer(up1, down0, 32, 3, [256, 256], has_batch_norm=has_batch_norm, data_format=data_format)
         # 256
 
-        # up0a = up_layer(up0, down0a, 16, 3, [512, 512], has_batch_norm=has_batch_norm, data_format=data_format)
+        up0a = up_layer(up0, down0a, 16, 3, [512, 512], has_batch_norm=has_batch_norm, data_format=data_format)
         # 512
 
-        # up0b = up_layer(up0a, down0b, 8, 3, [1024, 1024], has_batch_norm=has_batch_norm, data_format=data_format)
+        up0b = up_layer(up0a, down0b, 8, 3, [1024, 1024], has_batch_norm=has_batch_norm, data_format=data_format)
         # 1024
 
-        classify = slim.conv2d(up0, 1, 1, data_format=data_format)
+        classify = slim.conv2d(up0b, 1, 1, data_format=data_format)
 
     return classify

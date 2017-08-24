@@ -10,19 +10,19 @@ import os
 import time
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="0,1,3,4"
+os.environ["CUDA_VISIBLE_DEVICES"]="0,1,3,4,5,6,7,8"
 
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('train_dir', './checkpoints',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_epoches', 1,
+tf.app.flags.DEFINE_integer('max_epoches', 2,
                             """Number of batches to run.""")
-tf.app.flags.DEFINE_integer('batch_size', 8,
+tf.app.flags.DEFINE_integer('batch_size', 4,
                             """Number of batches to run.""")
 
-tf.app.flags.DEFINE_integer('num_gpus', 4,
+tf.app.flags.DEFINE_integer('num_gpus', 8,
                             """How many GPUs to use.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
@@ -59,8 +59,10 @@ def bce_dice_loss(logits, masks):
     bce_loss = tf.reduce_mean(
         tf.losses.sigmoid_cross_entropy(logits=logits, multi_class_labels=y, weights=weights))
     all_loss = bce_loss + dice_coff_loss
+     
+    dice_coff = 1 - dice_coff_loss
 
-    tf.add_to_collection('losses', all_loss)
+    return all_loss, dice_coff
 
     # The total loss is defined as the cross entropy loss plus all of the weight
     # decay terms (L2 loss).
@@ -88,23 +90,25 @@ def tower_loss(scope, images, masks):
 
     # Build the portion of the Graph calculating the losses. Note that we will
     # assemble the total_loss using a custom function below.
-    _ = bce_dice_loss(logits, mask_batch)
+    all_loss, dice_coff = bce_dice_loss(logits, mask_batch)
 
     # Assemble all of the losses for the current tower only.
-    losses = tf.get_collection('losses', scope)
+    # losses = tf.get_collection('losses', scope)
 
     # Calculate the total loss for the current tower.
-    total_loss = tf.add_n(losses, name='total_loss')
+    # total_loss = tf.add_n(losses, name='total_loss')
 
     # Attach a scalar summary to all individual losses and the total loss; do the
     # same for the averaged version of the losses.
-    for l in losses + [total_loss]:
+    # for l in losses + [total_loss]:
         # Remove 'tower_[0-9]/' from the name in case this is a multi-GPU training
         # session. This helps the clarity of presentation on tensorboard.
-        loss_name = re.sub('%s_[0-9]*/' % "unet", '', l.op.name)
-        tf.summary.scalar(loss_name, l)
+    loss_name = re.sub('%s_[0-9]*/' % "unet", '', all_loss.op.name)
+    tf.summary.scalar(loss_name, all_loss)
+    dice_coff_name = re.sub('%s_[0-9]*/' % "unet", '', dice_coff.op.name)
+    tf.summary.scalar(dice_coff_name, dice_coff)
 
-    return total_loss
+    return all_loss, dice_coff
 
 def average_gradients(tower_grads):
   """Calculate the average gradient for each shared variable across all towers.
@@ -163,7 +167,7 @@ def train():
         starter_learning_rate = 0.01
         learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
                                                    10000, 0.8)
-        manually_learning_rate = 0.0001
+        manually_learning_rate = 0.01
         opt = tf.train.AdamOptimizer(manually_learning_rate)
 
         images, masks = get_training_inputs(training_ids)
@@ -177,7 +181,7 @@ def train():
                     with tf.name_scope('%s_%d' % ("unet", i)) as scope:
                         image_batch, mask_batch = batch_queue.dequeue()
 
-                        loss = tower_loss(scope, image_batch, mask_batch)
+                        loss, dice_coff = tower_loss(scope, image_batch, mask_batch)
 
                         # Reuse variables for the next tower.
                         tf.get_variable_scope().reuse_variables()
@@ -241,7 +245,7 @@ def train():
 
         for step in xrange(FLAGS.max_epoches * num_batches_per_epoch / FLAGS.num_gpus):
             start_time = time.time()
-            _, loss_value = sess.run([train_op, loss])
+            _, loss_value, dice_coff_value = sess.run([train_op, loss, dice_coff])
             duration = time.time() - start_time
 
             assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
@@ -251,10 +255,10 @@ def train():
                 examples_per_sec = num_examples_per_step / duration
                 sec_per_batch = duration / FLAGS.num_gpus
 
-                format_str = ('%s: epoch %d step %d, loss = %.2f (%.1f examples/sec; %.3f '
+                format_str = ('%s: epoch %d step %d, loss = %.4f, dice_coff = %.4f (%.1f examples/sec; %.3f '
                               'sec/batch)')
                 print (format_str % (datetime.now(), (step + 1) / num_batches_per_epoch, (step + 1) % num_batches_per_epoch, loss_value,
-                                     examples_per_sec, sec_per_batch))
+                                     dice_coff_value, examples_per_sec, sec_per_batch))
 
             if step % 100 == 0:
                 summary_str = sess.run(summary_op)
@@ -274,7 +278,7 @@ def get_training_inputs(training_ids):
         training_image_batch, training_mask_batch = tf.train.shuffle_batch([training_image, training_mask],
                                                                            batch_size=FLAGS.batch_size,
                                                                            min_after_dequeue=200,
-                                                                           capacity=400, num_threads=16)
+                                                                           capacity=400, num_threads=20)
         return training_image_batch, training_mask_batch
 
 

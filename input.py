@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
-DATA_DIR = "/home/yang/datasets/kaggle-carvana/"
+DATA_DIR = "./"
 
 def get_image_ids():
     file_name = DATA_DIR + "data/train_masks.csv"

@@ -9,6 +9,9 @@ from datetime import datetime
 import os
 import time
 
+import os
+os.environ["CUDA_VISIBLE_DEVICES"]="0,1,3,4"
+
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('train_dir', './checkpoints',
@@ -19,7 +22,7 @@ tf.app.flags.DEFINE_integer('max_epoches', 1,
 tf.app.flags.DEFINE_integer('batch_size', 8,
                             """Number of batches to run.""")
 
-tf.app.flags.DEFINE_integer('num_gpus', 1,
+tf.app.flags.DEFINE_integer('num_gpus', 4,
                             """How many GPUs to use.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
@@ -61,7 +64,7 @@ def bce_dice_loss(logits, masks):
 
     # The total loss is defined as the cross entropy loss plus all of the weight
     # decay terms (L2 loss).
-    return tf.add_n(tf.get_collection('losses'), name='total_loss')
+    # return tf.add_n(tf.get_collection('losses'), name='total_loss')
 
 
 def tower_loss(scope, images, masks):
@@ -79,8 +82,9 @@ def tower_loss(scope, images, masks):
     # Build inference Graph.
     image_batch = resize_image_and_transpose(images, size=[1024, 1024], data_format=DATA_FORMAT)
     mask_batch = resize_image_and_transpose(masks, size=[1024, 1024], data_format=DATA_FORMAT)
-
-    logits = uNet(image_batch, has_batch_norm=True, data_format=DATA_FORMAT)
+    
+    with tf.contrib.slim.arg_scope([tf.contrib.slim.model_variable, tf.contrib.slim.variable], device='/cpu:0'):
+        logits = uNet(image_batch, has_batch_norm=True, data_format=DATA_FORMAT)
 
     # Build the portion of the Graph calculating the losses. Note that we will
     # assemble the total_loss using a custom function below.
@@ -185,6 +189,8 @@ def train():
                         grads = opt.compute_gradients(loss)
 
                         # Keep track of the gradients across all towers.
+                        # tower_grads.append(grads)
+                        
                         tower_grads.append(grads)
 
         # We must calculate the mean of each gradient. Note that this is the
@@ -215,7 +221,7 @@ def train():
         saver = tf.train.Saver(tf.global_variables())
 
         # Build the summary operation from the last tower summaries.
-        summary_op = tf.summary.merge(summaries)
+        summary_op = tf.summary.merge_all()
 
         # Build an initialization operation to run below.
         init = tf.global_variables_initializer()
@@ -233,14 +239,14 @@ def train():
 
         summary_writer = tf.summary.FileWriter(FLAGS.train_dir, sess.graph)
 
-        for step in xrange(FLAGS.max_epoches * num_batches_per_epoch):
+        for step in xrange(FLAGS.max_epoches * num_batches_per_epoch / FLAGS.num_gpus):
             start_time = time.time()
             _, loss_value = sess.run([train_op, loss])
             duration = time.time() - start_time
 
             assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
 
-            if step % 10 == 0:
+            if step % 1 == 0:
                 num_examples_per_step = FLAGS.batch_size * FLAGS.num_gpus
                 examples_per_sec = num_examples_per_step / duration
                 sec_per_batch = duration / FLAGS.num_gpus
@@ -253,9 +259,10 @@ def train():
             if step % 100 == 0:
                 summary_str = sess.run(summary_op)
                 summary_writer.add_summary(summary_str, step)
+                summary_writer.flush()
 
             # Save the model checkpoint periodically.
-            if (step + 1) % num_batches_per_epoch == 0:
+            if (step + 1) % (num_batches_per_epoch/FLAGS.num_gpus) == 0:
                 checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
                 saver.save(sess, checkpoint_path, global_step=step)
 
@@ -266,8 +273,8 @@ def get_training_inputs(training_ids):
         training_image, training_mask = propressing(training_image, training_mask, True)
         training_image_batch, training_mask_batch = tf.train.shuffle_batch([training_image, training_mask],
                                                                            batch_size=FLAGS.batch_size,
-                                                                           min_after_dequeue=100,
-                                                                           capacity=200)
+                                                                           min_after_dequeue=200,
+                                                                           capacity=400, num_threads=16)
         return training_image_batch, training_mask_batch
 
 

@@ -18,7 +18,7 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', './checkpoints',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_epoches', 1,
+tf.app.flags.DEFINE_integer('max_epoches', 10,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('batch_size', 1,
                             """Number of batches to run.""")
@@ -270,7 +270,7 @@ def train():
                 format_str = ('%s: epoch %d step %d, loss = %.4f, dice_coff = %.4f (%.1f examples/sec; %.3f '
                               'sec/batch)')
                 logging.info(format_str % (
-                datetime.now(), (step + 1) / num_batches_per_epoch, (step + 1) % num_batches_per_epoch, loss_value,
+                datetime.now(), (step + 1) / (num_batches_per_epoch/FLAGS.num_gpus), (step + 1) % (num_batches_per_epoch/FLAGS.num_gpus), loss_value,
                 dice_coff_value, examples_per_sec, sec_per_batch))
 
             if step % 1 == 0:

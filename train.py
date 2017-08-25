@@ -30,7 +30,7 @@ tf.app.flags.DEFINE_boolean('log_device_placement', False,
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
                     datefmt='%a, %d %b %Y %H:%M:%S',
-                    filename='train.log',
+                    filename='logs/train.log',
                     filemode='w')
 
 DATA_FORMAT = "NCHW"

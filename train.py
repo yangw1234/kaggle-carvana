@@ -203,8 +203,8 @@ def train():
         avg_loss = tf.div(tf.add_n(losses), len(losses), name="avg_loss")
         avg_dice_coff = tf.div(tf.add_n(dice_coffs), len(dice_coffs), name="avg_dice_coff")
 
-        avg_loss_summary = tf.summary.scalar(avg_loss, "avg_loss")
-        avg_dice_coff_summary = tf.summary.scalar(avg_dice_coff, "avg_dice_coff")
+        avg_loss_summary = tf.summary.scalar("avg_loss", avg_loss)
+        avg_dice_coff_summary = tf.summary.scalar("avg_dice_coff", avg_dice_coff)
 
         # Add histograms for gradients.
         for grad, var in grads:

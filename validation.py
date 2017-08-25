@@ -35,6 +35,17 @@ logging.basicConfig(level=logging.DEBUG,
 DATA_FORMAT = "NCHW"
 
 
+def calc_dice_coff(logits, masks):
+    pred = tf.nn.sigmoid(logits)
+    final_pred = resize_image(pred, [1280, 1918], DATA_FORMAT)
+    if DATA_FORMAT == "NCHW":
+        masks = tf.transpose(masks, perm=[0, 3, 2, 1])
+    final_mask = tf.to_float(masks)
+    inter = tf.reduce_sum(final_pred * final_mask)
+    dice_coff = (2.0 * tf.to_float(inter) + 1.0) / (tf.to_float(tf.reduce_sum(final_pred)) + tf.to_float(tf.reduce_sum(final_mask)) + 1.0)
+    return dice_coff
+
+
 def bce_dice_loss(logits, masks):
     probability = tf.nn.sigmoid(logits)
     y = tf.cast(masks, tf.float32)
@@ -59,9 +70,7 @@ def bce_dice_loss(logits, masks):
         tf.losses.sigmoid_cross_entropy(logits=logits, multi_class_labels=y, weights=weights))
     all_loss = bce_loss + dice_coff_loss
 
-    dice_coff = 1 - dice_coff_loss
-
-    return all_loss, dice_coff
+    return all_loss
 
     # The total loss is defined as the cross entropy loss plus all of the weight
     # decay terms (L2 loss).
@@ -90,7 +99,9 @@ def tower_loss(scope, images, masks):
 
     # Build the portion of the Graph calculating the losses. Note that we will
     # assemble the total_loss using a custom function below.
-    all_loss, dice_coff = bce_dice_loss(logits, mask_batch)
+    all_loss = bce_dice_loss(logits, mask_batch)
+
+    dice_coff = calc_dice_coff(logits, masks)
 
     return all_loss, dice_coff
 

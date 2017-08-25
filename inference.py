@@ -30,7 +30,7 @@ tf.app.flags.DEFINE_boolean('log_device_placement', False,
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
                     datefmt='%a, %d %b %Y %H:%M:%S',
-                    filename='logs/validation.log',
+                    filename='logs/inference.log',
                     filemode='w')
 
 DATA_FORMAT = "NCHW"
@@ -76,7 +76,7 @@ def inference():
         batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
             [images, file_names], capacity=2 * FLAGS.num_gpus)
 
-        outputQueue = tf.FIFOQueue(100, tf.float32)
+        outputQueue = tf.FIFOQueue(100, [tf.float32, tf.string])
         with tf.variable_scope(tf.get_variable_scope()):
             for i in xrange(FLAGS.num_gpus):
                 with tf.device('/gpu:%d' % i):
@@ -85,7 +85,7 @@ def inference():
 
                         pred_mask = prediction(scope, image_batch)
 
-                        outputQueue.enqueue([pred_mask, image_batch])
+                        outputQueue.enqueue([pred_mask, file_names])
 
                         # Reuse variables for the next tower.
                         tf.get_variable_scope().reuse_variables()

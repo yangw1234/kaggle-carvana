@@ -1,2 +1,7 @@
 .idea/
 checkpoints*
+data
+graph
+logs
+*.pyc
+

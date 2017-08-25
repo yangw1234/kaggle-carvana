@@ -9,11 +9,11 @@ def down_layer(inputs, filters, kernel_size, has_batch_norm, has_pool, data_form
     else:
         channels_order = "channels_first"
 
-    down = slim.conv2d(inputs, filters, kernel_size, padding="same", data_format=data_format)
+    down = slim.conv2d(inputs, filters, kernel_size, padding="same", data_format=data_format, activation_fn=None)
     if has_batch_norm:
         down = tf.contrib.layers.batch_norm(down, fused=True, data_format=data_format)
     down = tf.nn.relu(down)
-    down = slim.conv2d(down, filters, kernel_size, padding="same", data_format=data_format)
+    down = slim.conv2d(down, filters, kernel_size, padding="same", data_format=data_format, activation_fn=None)
     if has_batch_norm:
         down = tf.contrib.layers.batch_norm(down, fused=True, data_format=data_format)
     down = tf.nn.relu(down)
@@ -34,12 +34,12 @@ def up_layer(ups, downs, filters, kernel_size, output_size, has_batch_norm, data
     ups = resize_image(ups, size=output_size, data_format=data_format)
     ups = tf.concat([ups, downs], axis=channel_dim)
 
-    ups = slim.conv2d(ups, filters, kernel_size, padding="same", data_format=data_format)
+    ups = slim.conv2d(ups, filters, kernel_size, padding="same", data_format=data_format, activation_fn=None)
     if has_batch_norm:
         ups = tf.contrib.layers.batch_norm(ups, fused=True, data_format=data_format)
     ups = tf.nn.relu(ups)
 
-    ups = slim.conv2d(ups, filters, kernel_size, padding="same", data_format=data_format)
+    ups = slim.conv2d(ups, filters, kernel_size, padding="same", data_format=data_format, activation_fn=None)
     if has_batch_norm:
         ups = tf.contrib.layers.batch_norm(ups, fused=True, data_format=data_format)
     ups = tf.nn.relu(ups)
@@ -110,6 +110,6 @@ def uNet(inputs, has_batch_norm, data_format):
         up0b = up_layer(up0a, down0b, 8, 3, [1024, 1024], has_batch_norm=has_batch_norm, data_format=data_format)
         # 1024
 
-        classify = slim.conv2d(up0b, 1, 1, data_format=data_format)
+        classify = slim.conv2d(up0b, 1, 1, data_format=data_format, activation_fn=None)
 
     return classify

@@ -17,9 +17,9 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', './checkpoints',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_epoches', 2,
+tf.app.flags.DEFINE_integer('max_epoches', 1,
                             """Number of batches to run.""")
-tf.app.flags.DEFINE_integer('batch_size', 4,
+tf.app.flags.DEFINE_integer('batch_size', 1,
                             """Number of batches to run.""")
 
 tf.app.flags.DEFINE_integer('num_gpus', 8,
@@ -34,7 +34,6 @@ logging.basicConfig(level=logging.DEBUG,
                     filemode='w')
 
 DATA_FORMAT = "NCHW"
-
 
 def bce_dice_loss(logits, masks):
     probability = tf.nn.sigmoid(logits)
@@ -59,9 +58,9 @@ def bce_dice_loss(logits, masks):
     bce_loss = tf.reduce_mean(
         tf.losses.sigmoid_cross_entropy(logits=logits, multi_class_labels=y, weights=weights))
     all_loss = bce_loss + dice_coff_loss
-     
-    dice_coff = 1 - dice_coff_loss
 
+    dice_coff = 1 - dice_coff_loss
+     
     return all_loss, dice_coff
 
     # The total loss is defined as the cross entropy loss plus all of the weight
@@ -84,13 +83,16 @@ def tower_loss(scope, images, masks):
     # Build inference Graph.
     image_batch = resize_image_and_transpose(images, size=[1024, 1024], data_format=DATA_FORMAT)
     mask_batch = resize_image_and_transpose(masks, size=[1024, 1024], data_format=DATA_FORMAT)
-    
+    from tensorflow.python.ops import init_ops
     with tf.contrib.slim.arg_scope([tf.contrib.slim.model_variable, tf.contrib.slim.variable], device='/cpu:0'):
-        logits = uNet(image_batch, has_batch_norm=True, data_format=DATA_FORMAT)
+        with slim.arg_scope([slim.conv2d], weights_initializer=init_ops.glorot_uniform_initializer()):
+            logits = uNet(image_batch, has_batch_norm=True, data_format=DATA_FORMAT)
 
     # Build the portion of the Graph calculating the losses. Note that we will
     # assemble the total_loss using a custom function below.
     all_loss, dice_coff = bce_dice_loss(logits, mask_batch)
+
+    # dice_coff = calc_dice_coff(logits, masks)
 
     # Assemble all of the losses for the current tower only.
     # losses = tf.get_collection('losses', scope)
@@ -163,14 +165,16 @@ def train():
         validation_size = len(validation_ids) * 16
 
         num_batches_per_epoch = (training_size / FLAGS.batch_size)
+        val_batches = (validation_size / FLAGS.batch_size)
 
         starter_learning_rate = 0.01
         learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
                                                    10000, 0.8)
         manually_learning_rate = 0.01
         opt = tf.train.AdamOptimizer(manually_learning_rate)
-
+        # opt = tf.train.MomentumOptimizer(manually_learning_rate, 0.9)
         images, masks = get_training_inputs(training_ids)
+
         batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
             [images, masks], capacity=2 * FLAGS.num_gpus)
 
@@ -179,6 +183,7 @@ def train():
             for i in xrange(FLAGS.num_gpus):
                 with tf.device('/gpu:%d' % i):
                     with tf.name_scope('%s_%d' % ("unet", i)) as scope:
+                        
                         image_batch, mask_batch = batch_queue.dequeue()
 
                         loss, dice_coff = tower_loss(scope, image_batch, mask_batch)
@@ -237,12 +242,17 @@ def train():
             allow_soft_placement=True,
             log_device_placement=FLAGS.log_device_placement))
         sess.run(init)
-
+        
         # Start the queue runners.
         tf.train.start_queue_runners(sess=sess)
 
-        summary_writer = tf.summary.FileWriter(FLAGS.train_dir, sess.graph)
+        ckpt = tf.train.get_checkpoint_state("./checkpoints")
 
+        if ckpt and ckpt.model_checkpoint_path:
+            saver.restore(sess, ckpt.model_checkpoint_path)
+
+        summary_writer = tf.summary.FileWriter(FLAGS.train_dir, sess.graph)
+        
         for step in xrange(FLAGS.max_epoches * num_batches_per_epoch / FLAGS.num_gpus):
             start_time = time.time()
             _, loss_value, dice_coff_value = sess.run([train_op, loss, dice_coff])
@@ -257,13 +267,12 @@ def train():
 
                 format_str = ('%s: epoch %d step %d, loss = %.4f, dice_coff = %.4f (%.1f examples/sec; %.3f '
                               'sec/batch)')
-                print (format_str % (datetime.now(), (step + 1) / num_batches_per_epoch, (step + 1) % num_batches_per_epoch, loss_value,
+                logging.info(format_str % (datetime.now(), (step + 1) / num_batches_per_epoch, (step + 1) % num_batches_per_epoch, loss_value,
                                      dice_coff_value, examples_per_sec, sec_per_batch))
 
-            if step % 100 == 0:
+            if step % 10 == 0:
                 summary_str = sess.run(summary_op)
                 summary_writer.add_summary(summary_str, step)
-                summary_writer.flush()
 
             # Save the model checkpoint periodically.
             if (step + 1) % (num_batches_per_epoch/FLAGS.num_gpus) == 0:

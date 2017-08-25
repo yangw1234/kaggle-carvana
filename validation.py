@@ -11,19 +11,17 @@ import time
 
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,3,4,5,6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "7,8"
 
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('train_dir', './checkpoints',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_epoches', 1,
-                            """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('batch_size', 1,
                             """Number of batches to run.""")
 
-tf.app.flags.DEFINE_integer('num_gpus', 6,
+tf.app.flags.DEFINE_integer('num_gpus', 2,
                             """How many GPUs to use.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
@@ -94,11 +92,6 @@ def tower_loss(scope, images, masks):
     # assemble the total_loss using a custom function below.
     all_loss, dice_coff = bce_dice_loss(logits, mask_batch)
 
-    loss_name = re.sub('%s_[0-9]*/' % "unet", '', all_loss.op.name)
-    tf.summary.scalar(loss_name, all_loss)
-    dice_coff_name = re.sub('%s_[0-9]*/' % "unet", '', dice_coff.op.name)
-    tf.summary.scalar(dice_coff_name, dice_coff)
-
     return all_loss, dice_coff
 
 
@@ -140,7 +133,7 @@ def average_gradients(tower_grads):
     return average_grads
 
 
-def train():
+def validation():
     with tf.Graph().as_default(), tf.device('/cpu:0'):
         global_step = tf.get_variable(
             'global_step', [],
@@ -148,27 +141,17 @@ def train():
 
         ids = get_image_ids()
 
-        training_ids = ids[100:]
         validation_ids = ids[0:100]
 
-        training_size = len(training_ids) * 16
         validation_size = len(validation_ids) * 16
 
-        num_batches_per_epoch = (training_size / FLAGS.batch_size)
-        val_batches = (validation_size / FLAGS.batch_size)
+        num_batches_per_epoch = (validation_size / FLAGS.batch_size)
 
-        starter_learning_rate = 0.01
-        learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
-                                                   10000, 0.8)
-        manually_learning_rate = 0.01
-        opt = tf.train.AdamOptimizer(manually_learning_rate)
-        # opt = tf.train.MomentumOptimizer(manually_learning_rate, 0.9)
-        images, masks = get_training_inputs(training_ids)
+        images, masks = get_inputs(validation_ids, "Validation_Data", False)
 
         batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
             [images, masks], capacity=2 * FLAGS.num_gpus)
 
-        tower_grads = []
         losses = []
         dice_coffs = []
         with tf.variable_scope(tf.get_variable_scope()):
@@ -185,52 +168,11 @@ def train():
                         # Reuse variables for the next tower.
                         tf.get_variable_scope().reuse_variables()
 
-                        # Retain the summaries from the final tower.
-                        summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
-
-                        # Calculate the gradients for the batch of data on this tower.
-                        grads = opt.compute_gradients(loss)
-
-                        # Keep track of the gradients across all towers.
-                        # tower_grads.append(grads)
-
-                        tower_grads.append(grads)
-
-        # We must calculate the mean of each gradient. Note that this is the
-        # synchronization point across all towers.
-        grads = average_gradients(tower_grads)
-
         avg_loss = tf.div(tf.add_n(losses), len(losses), name="avg_loss")
         avg_dice_coff = tf.div(tf.add_n(dice_coffs), len(dice_coffs), name="avg_dice_coff")
 
-        avg_loss_summary = tf.summary.scalar(avg_loss, "avg_loss")
-        avg_dice_coff_summary = tf.summary.scalar(avg_dice_coff, "avg_dice_coff")
-
-        # Add histograms for gradients.
-        for grad, var in grads:
-            if grad is not None:
-                summaries.append(tf.summary.histogram(var.op.name + '/gradients', grad))
-
-        # Apply the gradients to adjust the shared variables.
-        apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
-
-        # Add histograms for trainable variables.
-        for var in tf.trainable_variables():
-            summaries.append(tf.summary.histogram(var.op.name, var))
-
-        # Track the moving averages of all trainable variables.
-        variable_averages = tf.train.ExponentialMovingAverage(
-            0.9999, global_step)
-        variables_averages_op = variable_averages.apply(tf.trainable_variables())
-
-        # Group all updates to into a single train op.
-        train_op = tf.group(apply_gradient_op, variables_averages_op)
-
         # Create a saver.
         saver = tf.train.Saver(tf.global_variables())
-
-        # Build the summary operation from the last tower summaries.
-        summary_op = tf.summary.merge_all()
 
         # Build an initialization operation to run below.
         init = tf.global_variables_initializer()
@@ -251,49 +193,53 @@ def train():
         if ckpt and ckpt.model_checkpoint_path:
             saver.restore(sess, ckpt.model_checkpoint_path)
 
+        init_step = global_step.eval(session=sess)
+
         summary_writer = tf.summary.FileWriter(FLAGS.train_dir, sess.graph)
 
-        for step in xrange(FLAGS.max_epoches * num_batches_per_epoch / FLAGS.num_gpus):
+        loss_acc = 0.0
+        dice_coff_acc = 0.0
+        for step in xrange(num_batches_per_epoch / FLAGS.num_gpus):
             start_time = time.time()
-            _, loss_value, dice_coff_value = sess.run([train_op, avg_loss, avg_dice_coff])
+            _, loss_value, dice_coff_value = sess.run([avg_loss, avg_dice_coff])
             duration = time.time() - start_time
 
-            assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
+            loss_acc = loss_acc + loss_value
+            dice_coff_acc = dice_coff_acc + dice_coff_value
 
-            if step % 1 == 0:
-                num_examples_per_step = FLAGS.batch_size * FLAGS.num_gpus
-                examples_per_sec = num_examples_per_step / duration
-                sec_per_batch = duration / FLAGS.num_gpus
+            num_examples_per_step = FLAGS.batch_size * FLAGS.num_gpus
+            examples_per_sec = num_examples_per_step / duration
+            sec_per_batch = duration / FLAGS.num_gpus
 
-                format_str = ('%s: epoch %d step %d, loss = %.4f, dice_coff = %.4f (%.1f examples/sec; %.3f '
-                              'sec/batch)')
-                logging.info(format_str % (
-                datetime.now(), (step + 1) / num_batches_per_epoch, (step + 1) % num_batches_per_epoch, loss_value,
-                dice_coff_value, examples_per_sec, sec_per_batch))
+            format_str = ('%s: global_step %d step %d, loss = %.4f, dice_coff = %.4f (%.1f examples/sec; %.3f '
+                          'sec/batch)')
+            logging.info(format_str % (
+            datetime.now(), init_step, step, loss_value,
+            dice_coff_value, examples_per_sec, sec_per_batch))
 
-            if step % 1 == 0:
-                summary_str = sess.run(summary_op)
-                summary_writer.add_summary(summary_str, step)
+        val_avg_loss = loss_acc / (num_batches_per_epoch / FLAGS.num_gpus)
+        val_avg_dice_coff = dice_coff_acc / (num_batches_per_epoch / FLAGS.num_gpus)
+        sry = tf.Summary()
+        sry.value.add(tag="validation_dice_coff", simple_value=val_avg_dice_coff)
+        sry.value.add(tag="validation_loss", simple_value=val_avg_dice_coff)
+        summary_writer.add_summary(sry, global_step=init_step)
+        logging.info("validation, global_step: %s, loss: %s dice_coff: %s" % (init_step, val_avg_loss, val_avg_dice_coff)
 
-            # Save the model checkpoint periodically.
-            if (step + 1) % (num_batches_per_epoch / FLAGS.num_gpus) == 0:
-                checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
-                saver.save(sess, checkpoint_path, global_step=step)
+        summary_writer.add_summary(sry, init_step)
 
 
-def get_training_inputs(training_ids):
-    with tf.name_scope("Training_Data"):
-        training_image, training_mask = get_image_and_label(training_ids)
-        training_image, training_mask = propressing(training_image, training_mask, True)
-        training_image_batch, training_mask_batch = tf.train.shuffle_batch([training_image, training_mask],
-                                                                           batch_size=FLAGS.batch_size,
-                                                                           min_after_dequeue=200,
-                                                                           capacity=400, num_threads=20)
-        return training_image_batch, training_mask_batch
+def get_inputs(ids, scope, is_training):
+    with tf.name_scope(scope):
+        image, mask = get_image_and_label(ids)
+        image, mask = propressing(image, mask, is_training)
+        image_batch, mask_batch = tf.train.batch([image, mask],
+                                                 batch_size=FLAGS.batch_size,
+                                                 capacity=400, num_threads=8)
+        return image_batch, mask_batch
 
 
 def main(argv=None):  # pylint: disable=unused-argument
-    train()
+    validation()
 
 
 if __name__ == '__main__':

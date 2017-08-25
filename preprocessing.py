@@ -14,8 +14,8 @@ def propressing(image, mask, is_training):
     mask = tf.to_int32(mask)
     return image, mask
 
-def propressing_for_test(image, size, data_format):
-    image = resize_image(image, size=size, data_format=data_format)
+def propressing_for_test(image):
+    # image = resize_image(image, size=size, data_format=data_format)
 
     image = (image - 128.0) / 128.0
 

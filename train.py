@@ -251,9 +251,11 @@ def train():
         if ckpt and ckpt.model_checkpoint_path:
             saver.restore(sess, ckpt.model_checkpoint_path)
 
+        init_step = global_step.eval(session=sess)
+
         summary_writer = tf.summary.FileWriter(FLAGS.train_dir, sess.graph)
 
-        for step in xrange(FLAGS.max_epoches * num_batches_per_epoch / FLAGS.num_gpus):
+        for step in xrange(init_step, FLAGS.max_epoches * num_batches_per_epoch / FLAGS.num_gpus):
             start_time = time.time()
             _, loss_value, dice_coff_value = sess.run([train_op, avg_loss, avg_dice_coff])
             duration = time.time() - start_time

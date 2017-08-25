@@ -18,7 +18,7 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', './checkpoints',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('batch_size', 1,
+tf.app.flags.DEFINE_integer('batch_size', 3,
                             """Number of batches to run.""")
 
 tf.app.flags.DEFINE_integer('num_gpus', 2,
@@ -29,7 +29,7 @@ tf.app.flags.DEFINE_boolean('log_device_placement', False,
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
                     datefmt='%a, %d %b %Y %H:%M:%S',
-                    filename='logs/train.log',
+                    filename='logs/validation.log',
                     filemode='w')
 
 DATA_FORMAT = "NCHW"
@@ -201,7 +201,7 @@ def validation():
         dice_coff_acc = 0.0
         for step in xrange(num_batches_per_epoch / FLAGS.num_gpus):
             start_time = time.time()
-            _, loss_value, dice_coff_value = sess.run([avg_loss, avg_dice_coff])
+            loss_value, dice_coff_value = sess.run([avg_loss, avg_dice_coff])
             duration = time.time() - start_time
 
             loss_acc = loss_acc + loss_value
@@ -223,7 +223,7 @@ def validation():
         sry.value.add(tag="validation_dice_coff", simple_value=val_avg_dice_coff)
         sry.value.add(tag="validation_loss", simple_value=val_avg_dice_coff)
         summary_writer.add_summary(sry, global_step=init_step)
-        logging.info("validation, global_step: %s, loss: %s dice_coff: %s" % (init_step, val_avg_loss, val_avg_dice_coff)
+        logging.info("validation, global_step: %s, loss: %s dice_coff: %s" % (init_step, val_avg_loss, val_avg_dice_coff))
 
         summary_writer.add_summary(sry, init_step)
 

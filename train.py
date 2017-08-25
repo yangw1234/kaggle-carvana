@@ -179,6 +179,8 @@ def train():
             [images, masks], capacity=2 * FLAGS.num_gpus)
 
         tower_grads = []
+        losses = []
+        dice_coffs = []
         with tf.variable_scope(tf.get_variable_scope()):
             for i in xrange(FLAGS.num_gpus):
                 with tf.device('/gpu:%d' % i):
@@ -188,13 +190,16 @@ def train():
 
                         loss, dice_coff = tower_loss(scope, image_batch, mask_batch)
 
+                        losses.append(loss)
+                        dice_coffs.append(dice_coff)
+
                         # Reuse variables for the next tower.
                         tf.get_variable_scope().reuse_variables()
 
                         # Retain the summaries from the final tower.
                         summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
 
-                        # Calculate the gradients for the batch of data on this CIFAR tower.
+                        # Calculate the gradients for the batch of data on this tower.
                         grads = opt.compute_gradients(loss)
 
                         # Keep track of the gradients across all towers.
@@ -205,6 +210,12 @@ def train():
         # We must calculate the mean of each gradient. Note that this is the
         # synchronization point across all towers.
         grads = average_gradients(tower_grads)
+
+        avg_loss = tf.div(tf.add_n(losses), len(losses), name="avg_loss")
+        avg_dice_coff = tf.div(tf.add_n(dice_coffs), len(dice_coffs), name="avg_dice_coff")
+
+        avg_loss_summary = tf.summary.scalar(avg_loss, "avg_loss")
+        avg_dice_coff_summary = tf.summary.scalar(avg_dice_coff, "avg_dice_coff")
 
         # Add histograms for gradients.
         for grad, var in grads:
@@ -246,7 +257,7 @@ def train():
         # Start the queue runners.
         tf.train.start_queue_runners(sess=sess)
 
-        ckpt = tf.train.get_checkpoint_state("./checkpoints")
+        ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir)
 
         if ckpt and ckpt.model_checkpoint_path:
             saver.restore(sess, ckpt.model_checkpoint_path)
@@ -255,7 +266,7 @@ def train():
         
         for step in xrange(FLAGS.max_epoches * num_batches_per_epoch / FLAGS.num_gpus):
             start_time = time.time()
-            _, loss_value, dice_coff_value = sess.run([train_op, loss, dice_coff])
+            _, loss_value, dice_coff_value = sess.run([train_op, avg_loss, avg_dice_coff])
             duration = time.time() - start_time
 
             assert not np.isnan(loss_value), 'Model diverged with loss = NaN'
@@ -270,7 +281,7 @@ def train():
                 logging.info(format_str % (datetime.now(), (step + 1) / num_batches_per_epoch, (step + 1) % num_batches_per_epoch, loss_value,
                                      dice_coff_value, examples_per_sec, sec_per_batch))
 
-            if step % 10 == 0:
+            if step % 1 == 0:
                 summary_str = sess.run(summary_op)
                 summary_writer.add_summary(summary_str, step)
 

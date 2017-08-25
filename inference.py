@@ -62,9 +62,6 @@ def prediction(scope, images):
 
 def inference():
     with tf.Graph().as_default(), tf.device('/cpu:0'):
-        global_step = tf.get_variable(
-            'global_step', [],
-            initializer=tf.constant_initializer(0), trainable=False)
 
         ids = get_image_ids()
 
@@ -74,7 +71,7 @@ def inference():
 
         num_batches_per_epoch = (validation_size / FLAGS.batch_size)
 
-        images, file_names = get_test_inputs("Validation_Data", False)
+        images, file_names = get_test_inputs("Validation_Data")
 
         batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
             [images, file_names], capacity=2 * FLAGS.num_gpus)
@@ -132,11 +129,11 @@ def inference():
         submission_file.close()
 
 
-def get_test_inputs(scope, is_training):
+def get_test_inputs(scope):
     with tf.name_scope(scope):
         files = get_test_image_files()
         test_image, file_name = get_test_image(files)
-        test_image = propressing_for_test(test_image, [1024, 1024], is_training)
+        test_image = propressing_for_test(test_image)
         image_batch, file_name = tf.train.batch([test_image, file_name],
                                                        batch_size=FLAGS.batch_size,
                                                        capacity=400, num_threads=8)

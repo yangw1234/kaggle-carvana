@@ -1,6 +1,7 @@
 # Import libraries
 import numpy as np  # linear algebra
 from input import *
+import tensorflow as tf
 
 
 # Fast run length encoding

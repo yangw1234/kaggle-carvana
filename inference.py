@@ -12,17 +12,17 @@ from rle import *
 
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "7,8"
+os.environ["CUDA_VISIBLE_DEVICES"] = "8"
 
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_string('train_dir', './checkpoints',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('batch_size', 3,
+tf.app.flags.DEFINE_integer('batch_size', 8,
                             """Number of batches to run.""")
 
-tf.app.flags.DEFINE_integer('num_gpus', 2,
+tf.app.flags.DEFINE_integer('num_gpus', 1,
                             """How many GPUs to use.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
@@ -51,7 +51,7 @@ def prediction(scope, images):
     # Build inference Graph.
     image_batch = resize_image_and_transpose(images, size=[1024, 1024], data_format=DATA_FORMAT)
     from tensorflow.python.ops import init_ops
-    with tf.contrib.slim.arg_scope([tf.contrib.slim.model_variable, tf.contrib.slim.variable], device='/cpu:0'):
+    with tf.contrib.slim.arg_scope([tf.contrib.slim.model_variable, tf.contrib.slim.variable], device='/gpu:0'):
         with slim.arg_scope([slim.conv2d], weights_initializer=init_ops.glorot_uniform_initializer()):
             logits = uNet(image_batch, has_batch_norm=True, data_format=DATA_FORMAT)
             pred = tf.nn.sigmoid(logits)
@@ -63,20 +63,13 @@ def prediction(scope, images):
 def inference():
     with tf.Graph().as_default(), tf.device('/cpu:0'):
 
-        ids = get_image_ids()
-
-        validation_ids = ids[0:100]
-
-        validation_size = len(validation_ids) * 16
-
-        num_batches_per_epoch = (validation_size / FLAGS.batch_size)
-
-        images, file_names = get_test_inputs("Validation_Data")
+        images, file_names = get_test_inputs("Test_Data")
 
         batch_queue = tf.contrib.slim.prefetch_queue.prefetch_queue(
             [images, file_names], capacity=2 * FLAGS.num_gpus)
 
-        outputQueue = tf.FIFOQueue(100, [tf.float32, tf.string])
+        # outputQueue = tf.FIFOQueue(100, [tf.float32, tf.string])
+        outputs = []
         with tf.variable_scope(tf.get_variable_scope()):
             for i in xrange(FLAGS.num_gpus):
                 with tf.device('/gpu:%d' % i):
@@ -85,13 +78,14 @@ def inference():
 
                         pred_mask = prediction(scope, image_batch)
 
-                        outputQueue.enqueue([pred_mask, file_names])
+                        # outputQueue.enqueue([pred_mask, file_names])
+                        outputs.append((pred_mask, file_names))
 
                         # Reuse variables for the next tower.
                         tf.get_variable_scope().reuse_variables()
 
 
-        pred, file_name = outputQueue.dequeue()
+        # pred, file_name = outputQueue.dequeue()
         # Create a saver.
         saver = tf.train.Saver(tf.global_variables())
 
@@ -113,16 +107,17 @@ def inference():
 
         if ckpt and ckpt.model_checkpoint_path:
             saver.restore(sess, ckpt.model_checkpoint_path)
-
+        num_batches_per_epoch = 100064 / (FLAGS.batch_size * FLAGS.num_gpus)
         submission_file = open("submission.csv", "w")
         submission_file.writelines("img,rle_mask\n")
         for step in xrange(num_batches_per_epoch):
             # Retrieve a single instance:
             start_time = time.time()
-            pred_value, file_value = sess.run([pred, file_name])
-            for i in range(0, FLAGS.batch_size):
-                line = rle(pred_value[i, 0, :, :], file_value[i].split("/")[-1])
-                submission_file.writelines(line + "\n")
+            output_values = sess.run(outputs)
+            for (pred_value, file_value) in output_values:
+                for i in range(0, FLAGS.batch_size):
+                    line = rle(pred_value[i, 0, :, :], file_value[i].split("/")[-1])
+                    submission_file.writelines(line + "\n")
             logging.info("num: %s batch, total %s batches, using %s seconds" % (
             step, num_batches_per_epoch, (time.time() - start_time)))
 

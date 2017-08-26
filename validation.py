@@ -90,8 +90,8 @@ def tower_loss(scope, images, masks):
   """
 
     # Build inference Graph.
-    image_batch = resize_image_and_transpose(images, size=[1024, 1024], data_format=DATA_FORMAT)
-    mask_batch = resize_image_and_transpose(masks, size=[1024, 1024], data_format=DATA_FORMAT)
+    image_batch = resize_image_and_transpose(images, size=[1280, 1920], data_format=DATA_FORMAT)
+    mask_batch = resize_image_and_transpose(masks, size=[1280, 1920], data_format=DATA_FORMAT)
     from tensorflow.python.ops import init_ops
     with tf.contrib.slim.arg_scope([tf.contrib.slim.model_variable, tf.contrib.slim.variable], device='/cpu:0'):
         with slim.arg_scope([slim.conv2d], weights_initializer=init_ops.glorot_uniform_initializer()):

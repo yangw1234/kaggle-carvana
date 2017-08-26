@@ -18,7 +18,7 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', './checkpoints',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_epoches', 10,
+tf.app.flags.DEFINE_integer('max_epoches', 40,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('batch_size', 1,
                             """Number of batches to run.""")
@@ -83,8 +83,8 @@ def tower_loss(scope, images, masks):
   """
 
     # Build inference Graph.
-    image_batch = resize_image_and_transpose(images, size=[1024, 1024], data_format=DATA_FORMAT)
-    mask_batch = resize_image_and_transpose(masks, size=[1024, 1024], data_format=DATA_FORMAT)
+    image_batch = resize_image_and_transpose(images, size=[1280, 1920], data_format=DATA_FORMAT)
+    mask_batch = resize_image_and_transpose(masks, size=[1280, 1920], data_format=DATA_FORMAT)
     from tensorflow.python.ops import init_ops
     with tf.contrib.slim.arg_scope([tf.contrib.slim.model_variable, tf.contrib.slim.variable], device='/cpu:0'):
         with slim.arg_scope([slim.conv2d], weights_initializer=init_ops.glorot_uniform_initializer()):
@@ -95,9 +95,9 @@ def tower_loss(scope, images, masks):
     all_loss, dice_coff = bce_dice_loss(logits, mask_batch)
 
     loss_name = re.sub('%s_[0-9]*/' % "unet", '', all_loss.op.name)
-    tf.summary.scalar(loss_name, all_loss)
+    # tf.summary.scalar(loss_name, all_loss)
     dice_coff_name = re.sub('%s_[0-9]*/' % "unet", '', dice_coff.op.name)
-    tf.summary.scalar(dice_coff_name, dice_coff)
+    # tf.summary.scalar(dice_coff_name, dice_coff)
 
     return all_loss, dice_coff
 
@@ -207,16 +207,16 @@ def train():
         avg_dice_coff_summary = tf.summary.scalar("avg_dice_coff", avg_dice_coff)
 
         # Add histograms for gradients.
-        for grad, var in grads:
-            if grad is not None:
-                summaries.append(tf.summary.histogram(var.op.name + '/gradients', grad))
+        # for grad, var in grads:
+        #    if grad is not None:
+        #        summaries.append(tf.summary.histogram(var.op.name + '/gradients', grad))
 
         # Apply the gradients to adjust the shared variables.
         apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
 
         # Add histograms for trainable variables.
-        for var in tf.trainable_variables():
-            summaries.append(tf.summary.histogram(var.op.name, var))
+        # for var in tf.trainable_variables():
+        #    summaries.append(tf.summary.histogram(var.op.name, var))
 
         # Track the moving averages of all trainable variables.
         variable_averages = tf.train.ExponentialMovingAverage(

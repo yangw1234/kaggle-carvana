@@ -55,7 +55,8 @@ def resize_image(image, size, data_format):
     return image
 
 def resize_image_and_transpose(image, size, data_format):
-    image = tf.image.resize_bilinear(image, size=size)
+    #image = tf.image.resize_bilinear(image, size=size)
+    image = tf.image.resize_image_with_crop_or_pad(image, target_height=1280, target_width=1920)
     if data_format == "NCHW":
         image = tf.transpose(image, perm=[0, 3, 2, 1])
     return image
@@ -89,25 +90,25 @@ def uNet(inputs, has_batch_norm, data_format):
         center, _ = down_layer(down4_pool, 1024, 3, has_batch_norm=has_batch_norm, has_pool=False, data_format=data_format)
         # center
 
-        up4 = up_layer(center, down4, 512, 3, [16, 16], has_batch_norm=has_batch_norm, data_format=data_format)
+        up4 = up_layer(center, down4, 512, 3, [20, 30], has_batch_norm=has_batch_norm, data_format=data_format)
         # 16
 
-        up3 = up_layer(up4, down3, 256, 3, [32, 32], has_batch_norm=has_batch_norm, data_format=data_format)
+        up3 = up_layer(up4, down3, 256, 3, [40, 60], has_batch_norm=has_batch_norm, data_format=data_format)
         # 32
 
-        up2 = up_layer(up3, down2, 128, 3, [64, 64], has_batch_norm=has_batch_norm, data_format=data_format)
+        up2 = up_layer(up3, down2, 128, 3, [80, 120], has_batch_norm=has_batch_norm, data_format=data_format)
         # 64
 
-        up1 = up_layer(up2, down1, 64, 3, [128, 128], has_batch_norm=has_batch_norm, data_format=data_format)
+        up1 = up_layer(up2, down1, 64, 3, [160, 240], has_batch_norm=has_batch_norm, data_format=data_format)
         # 128
 
-        up0 = up_layer(up1, down0, 32, 3, [256, 256], has_batch_norm=has_batch_norm, data_format=data_format)
+        up0 = up_layer(up1, down0, 32, 3, [320, 480], has_batch_norm=has_batch_norm, data_format=data_format)
         # 256
 
-        up0a = up_layer(up0, down0a, 16, 3, [512, 512], has_batch_norm=has_batch_norm, data_format=data_format)
+        up0a = up_layer(up0, down0a, 16, 3, [640, 960], has_batch_norm=has_batch_norm, data_format=data_format)
         # 512
 
-        up0b = up_layer(up0a, down0b, 8, 3, [1024, 1024], has_batch_norm=has_batch_norm, data_format=data_format)
+        up0b = up_layer(up0a, down0b, 8, 3, [1280, 1920], has_batch_norm=has_batch_norm, data_format=data_format)
         # 1024
 
         classify = slim.conv2d(up0b, 1, 1, data_format=data_format, activation_fn=None)

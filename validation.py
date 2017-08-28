@@ -21,7 +21,7 @@ tf.app.flags.DEFINE_string('train_dir', './checkpoints',
 tf.app.flags.DEFINE_integer('batch_size', 3,
                             """Number of batches to run.""")
 
-tf.app.flags.DEFINE_integer('num_gpus', 1,
+tf.app.flags.DEFINE_integer('num_gpus', 2,
                             """How many GPUs to use.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
@@ -144,13 +144,16 @@ def average_gradients(tower_grads):
     return average_grads
 
 
-def validation():
+def validation(last_step):
     with tf.Graph().as_default(), tf.device('/cpu:0'):
         global_step = tf.get_variable(
             'global_step', [],
             initializer=tf.constant_initializer(0), trainable=False)
 
         ids = get_image_ids()
+
+        np.random.seed(0327)
+        ids = np.random.shuffle(ids)
 
         validation_ids = ids[0:100]
 
@@ -206,6 +209,9 @@ def validation():
 
         init_step = global_step.eval(session=sess)
 
+        if init_step <= last_step:
+            return last_step
+
         summary_writer = tf.summary.FileWriter(FLAGS.train_dir + "_val", sess.graph)
 
         loss_acc = 0.0
@@ -238,6 +244,8 @@ def validation():
 
         summary_writer.add_summary(sry, init_step)
 
+        return init_step
+
 
 def get_inputs(ids, scope, is_training):
     with tf.name_scope(scope):
@@ -250,8 +258,20 @@ def get_inputs(ids, scope, is_training):
 
 
 def main(argv=None):  # pylint: disable=unused-argument
-    validation()
-
+    for i in range(720):
+        f = open("latest_checkpoint", "r")
+        num_str = f.readline()
+        f.close()
+        if num_str == "":
+            num = 0
+        else:
+            num = int(num_str)
+        current_step = validation(num)
+        if current_step > num:
+            f = open("latest_checkpoint", "w")
+            f.writelines(str(current_step))
+            f.close()
+        time.sleep(60)
 
 if __name__ == '__main__':
     tf.app.run()

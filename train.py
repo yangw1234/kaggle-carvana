@@ -18,7 +18,7 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', './checkpoints',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_epoches', 60,
+tf.app.flags.DEFINE_integer('max_epoches', 100,
                             """Number of batches to run.""")
 tf.app.flags.DEFINE_integer('batch_size', 4,
                             """Number of batches to run.""")
@@ -148,6 +148,9 @@ def train():
 
         ids = get_image_ids()
 
+        np.random.seed(0327)
+        ids = np.random.shuffle(ids)
+
         training_ids = ids[100:]
         validation_ids = ids[0:100]
 
@@ -206,17 +209,8 @@ def train():
         avg_loss_summary = tf.summary.scalar("avg_loss", avg_loss)
         avg_dice_coff_summary = tf.summary.scalar("avg_dice_coff", avg_dice_coff)
 
-        # Add histograms for gradients.
-        # for grad, var in grads:
-        #    if grad is not None:
-        #        summaries.append(tf.summary.histogram(var.op.name + '/gradients', grad))
-
         # Apply the gradients to adjust the shared variables.
         apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
-
-        # Add histograms for trainable variables.
-        # for var in tf.trainable_variables():
-        #    summaries.append(tf.summary.histogram(var.op.name, var))
 
         # Track the moving averages of all trainable variables.
         variable_averages = tf.train.ExponentialMovingAverage(

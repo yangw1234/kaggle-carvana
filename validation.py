@@ -43,7 +43,7 @@ def calc_dice_coff(logits, masks):
     final_mask = tf.to_float(masks)
     inter = tf.reduce_sum(final_pred * final_mask)
     dice_coff = (2.0 * tf.to_float(inter) + 1.0) / (tf.to_float(tf.reduce_sum(final_pred)) + tf.to_float(tf.reduce_sum(final_mask)) + 1.0)
-    return dice_coff
+    return dice_coff, pred
 
 
 def bce_dice_loss(logits, masks):
@@ -101,9 +101,9 @@ def tower_loss(scope, images, masks):
     # assemble the total_loss using a custom function below.
     all_loss = bce_dice_loss(logits, mask_batch)
 
-    dice_coff = calc_dice_coff(logits, masks)
+    dice_coff, pred = calc_dice_coff(logits, masks)
 
-    return all_loss, dice_coff
+    return all_loss, dice_coff, pred
 
 
 def average_gradients(tower_grads):
@@ -168,13 +168,19 @@ def validation(last_step):
 
         losses = []
         dice_coffs = []
+        image_sumarys = []
         with tf.variable_scope(tf.get_variable_scope()):
             for i in xrange(FLAGS.num_gpus):
                 with tf.device('/gpu:%d' % i):
                     with tf.name_scope('%s_%d' % ("unet", i)) as scope:
                         image_batch, mask_batch = batch_queue.dequeue()
 
-                        loss, dice_coff = tower_loss(scope, image_batch, mask_batch)
+                        loss, dice_coff, pred = tower_loss(scope, image_batch, mask_batch)
+
+                        tf.summary.image("origin_image", image_batch)
+                        tf.summary.image("origin_mask", mask_batch)
+                        tf.summary.image("predictions", tf.transpose(pred))
+
 
                         losses.append(loss)
                         dice_coffs.append(dice_coff)
@@ -190,6 +196,8 @@ def validation(last_step):
 
         # Build an initialization operation to run below.
         init = tf.global_variables_initializer()
+
+        image_summary_op = tf.summary.merge_all()
 
         # Start running operations on the Graph. allow_soft_placement must be set to
         # True to build towers on GPU, as some of the ops do not have GPU
@@ -220,6 +228,10 @@ def validation(last_step):
             start_time = time.time()
             loss_value, dice_coff_value = sess.run([avg_loss, avg_dice_coff])
             duration = time.time() - start_time
+
+            # if init_step > 1000 and dice_coff_value < 0.90:
+            #     image_summary = sess.run(image_summary_op)
+            #     summary_writer.add_summary(image_summary, init_step)
 
             loss_acc = loss_acc + loss_value
             dice_coff_acc = dice_coff_acc + dice_coff_value

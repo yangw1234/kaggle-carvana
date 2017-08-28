@@ -52,7 +52,7 @@ def up_layer(ups, downs, filters, kernel_size, output_size, has_batch_norm, data
 def resize_image(image, size, data_format):
 
     if data_format == "NCHW":
-        image = tf.transpose(image, perm=[0, 3, 1, 2])
+        image = tf.transpose(image, perm=[0, 2, 3, 1])
         image = tf.image.resize_bilinear(image, size=size)
         image = tf.transpose(image, perm=[0, 3, 1, 2])
     else:

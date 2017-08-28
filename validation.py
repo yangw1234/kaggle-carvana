@@ -39,7 +39,7 @@ def calc_dice_coff(logits, masks):
     pred = tf.nn.sigmoid(logits)
     final_pred = resize_image(pred, [1280, 1918], DATA_FORMAT)
     if DATA_FORMAT == "NCHW":
-        masks = tf.transpose(masks, perm=[0, 3, 2, 1])
+        masks = tf.transpose(masks, perm=[0, 3, 1, 2])
     final_mask = tf.to_float(masks)
     inter = tf.reduce_sum(final_pred * final_mask)
     dice_coff = (2.0 * tf.to_float(inter) + 1.0) / (tf.to_float(tf.reduce_sum(final_pred)) + tf.to_float(tf.reduce_sum(final_mask)) + 1.0)

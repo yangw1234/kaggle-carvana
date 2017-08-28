@@ -19,7 +19,7 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', './checkpoints',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('batch_size', 8,
+tf.app.flags.DEFINE_integer('batch_size', 4,
                             """Number of batches to run.""")
 
 tf.app.flags.DEFINE_integer('num_gpus', 1,
@@ -49,13 +49,14 @@ def prediction(scope, images):
   """
 
     # Build inference Graph.
-    image_batch = resize_image_and_transpose(images, size=[1024, 1024], data_format=DATA_FORMAT)
+    image_batch = resize_image_and_transpose(images, size=[1280, 1920], data_format=DATA_FORMAT)
     from tensorflow.python.ops import init_ops
     with tf.contrib.slim.arg_scope([tf.contrib.slim.model_variable, tf.contrib.slim.variable], device='/gpu:0'):
         with slim.arg_scope([slim.conv2d], weights_initializer=init_ops.glorot_uniform_initializer()):
             logits = uNet(image_batch, has_batch_norm=True, data_format=DATA_FORMAT)
             pred = tf.nn.sigmoid(logits)
             final_pred = resize_image(pred, [1280, 1918], DATA_FORMAT)
+            # finl_pred = pred[:,:,:,:]
 
     return final_pred
 

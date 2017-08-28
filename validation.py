@@ -11,7 +11,7 @@ import time
 
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "7,8"
+os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -21,7 +21,7 @@ tf.app.flags.DEFINE_string('train_dir', './checkpoints',
 tf.app.flags.DEFINE_integer('batch_size', 3,
                             """Number of batches to run.""")
 
-tf.app.flags.DEFINE_integer('num_gpus', 2,
+tf.app.flags.DEFINE_integer('num_gpus', 1,
                             """How many GPUs to use.""")
 tf.app.flags.DEFINE_boolean('log_device_placement', False,
                             """Whether to log device placement.""")
@@ -93,9 +93,9 @@ def tower_loss(scope, images, masks):
     image_batch = resize_image_and_transpose(images, size=[1280, 1920], data_format=DATA_FORMAT)
     mask_batch = resize_image_and_transpose(masks, size=[1280, 1920], data_format=DATA_FORMAT)
     from tensorflow.python.ops import init_ops
-    with tf.contrib.slim.arg_scope([tf.contrib.slim.model_variable, tf.contrib.slim.variable], device='/cpu:0'):
+    with tf.contrib.slim.arg_scope([tf.contrib.slim.model_variable, tf.contrib.slim.variable], device='/gpu:0'):
         with slim.arg_scope([slim.conv2d], weights_initializer=init_ops.glorot_uniform_initializer()):
-            logits = uNet(image_batch, has_batch_norm=True, data_format=DATA_FORMAT)
+            logits = uNet_v2(image_batch, has_batch_norm=True, data_format=DATA_FORMAT)
 
     # Build the portion of the Graph calculating the losses. Note that we will
     # assemble the total_loss using a custom function below.
@@ -206,7 +206,7 @@ def validation():
 
         init_step = global_step.eval(session=sess)
 
-        summary_writer = tf.summary.FileWriter(FLAGS.train_dir, sess.graph)
+        summary_writer = tf.summary.FileWriter(FLAGS.train_dir + "_val", sess.graph)
 
         loss_acc = 0.0
         dice_coff_acc = 0.0
@@ -232,7 +232,7 @@ def validation():
         val_avg_dice_coff = dice_coff_acc / (num_batches_per_epoch / FLAGS.num_gpus)
         sry = tf.Summary()
         sry.value.add(tag="validation_dice_coff", simple_value=val_avg_dice_coff)
-        sry.value.add(tag="validation_loss", simple_value=val_avg_dice_coff)
+        sry.value.add(tag="validation_loss", simple_value=val_avg_loss)
         summary_writer.add_summary(sry, global_step=init_step)
         logging.info("validation, global_step: %s, loss: %s dice_coff: %s" % (init_step, val_avg_loss, val_avg_dice_coff))
 

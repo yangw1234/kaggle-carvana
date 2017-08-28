@@ -18,8 +18,8 @@ def propressing_for_test(image):
     return image
 
 def data_augmentation(image, mask):
-    uniform_random = tf.random_ops.random_uniform([], 0, 1.0)
-    mirror_cond = tf.math_ops.less(uniform_random, .5)
+    uniform_random = tf.random_uniform([], 0, 1.0)
+    mirror_cond = tf.less(uniform_random, .5)
     image = tf.cond(mirror_cond, lambda: tf.image.flip_left_right(image), lambda: image)
     mask = tf.cond(mirror_cond, lambda: tf.image.flip_left_right(mask), lambda: mask)
 

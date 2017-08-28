@@ -18,9 +18,9 @@ FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string('train_dir', './checkpoints',
                            """Directory where to write event logs """
                            """and checkpoint.""")
-tf.app.flags.DEFINE_integer('max_epoches', 40,
+tf.app.flags.DEFINE_integer('max_epoches', 60,
                             """Number of batches to run.""")
-tf.app.flags.DEFINE_integer('batch_size', 1,
+tf.app.flags.DEFINE_integer('batch_size', 4,
                             """Number of batches to run.""")
 
 tf.app.flags.DEFINE_integer('num_gpus', 6,
@@ -88,7 +88,7 @@ def tower_loss(scope, images, masks):
     from tensorflow.python.ops import init_ops
     with tf.contrib.slim.arg_scope([tf.contrib.slim.model_variable, tf.contrib.slim.variable], device='/cpu:0'):
         with slim.arg_scope([slim.conv2d], weights_initializer=init_ops.glorot_uniform_initializer()):
-            logits = uNet(image_batch, has_batch_norm=True, data_format=DATA_FORMAT)
+            logits = uNet_v2(image_batch, has_batch_norm=True, data_format=DATA_FORMAT)
 
     # Build the portion of the Graph calculating the losses. Note that we will
     # assemble the total_loss using a custom function below.
@@ -160,7 +160,7 @@ def train():
         starter_learning_rate = 0.01
         learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
                                                    10000, 0.8)
-        manually_learning_rate = 0.01
+        manually_learning_rate = 0.005
         opt = tf.train.AdamOptimizer(manually_learning_rate)
         # opt = tf.train.MomentumOptimizer(manually_learning_rate, 0.9)
         images, masks = get_training_inputs(training_ids)
@@ -286,7 +286,7 @@ def train():
 def get_training_inputs(training_ids):
     with tf.name_scope("Training_Data"):
         training_image, training_mask = get_image_and_label(training_ids)
-        training_image, training_mask = propressing(training_image, training_mask, True)
+        training_image, training_mask = propressing(training_image, training_mask, True, True)
         training_image_batch, training_mask_batch = tf.train.shuffle_batch([training_image, training_mask],
                                                                            batch_size=FLAGS.batch_size,
                                                                            min_after_dequeue=200,

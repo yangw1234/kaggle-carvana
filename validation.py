@@ -153,7 +153,7 @@ def validation(last_step):
         ids = get_image_ids()
 
         np.random.seed(0327)
-        ids = np.random.shuffle(ids)
+        np.random.shuffle(ids)
 
         validation_ids = ids[0:100]
 

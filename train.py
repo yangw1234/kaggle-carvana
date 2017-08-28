@@ -149,7 +149,7 @@ def train():
         ids = get_image_ids()
 
         np.random.seed(0327)
-        ids = np.random.shuffle(ids)
+        np.random.shuffle(ids)
 
         training_ids = ids[100:]
         validation_ids = ids[0:100]

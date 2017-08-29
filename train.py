@@ -209,6 +209,10 @@ def train():
         avg_loss_summary = tf.summary.scalar("avg_loss", avg_loss)
         avg_dice_coff_summary = tf.summary.scalar("avg_dice_coff", avg_dice_coff)
 
+        moving_avg = tf.get_default_graph().get_tensor_by_name("Unet/BatchNorm_1/moving_mean/(moving_mean)")
+
+        moving_avg_summary = tf.summary.scalar("moving_avg", moving_avg)
+
         # Apply the gradients to adjust the shared variables.
         apply_gradient_op = opt.apply_gradients(grads, global_step=global_step)
 

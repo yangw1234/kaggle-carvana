@@ -217,8 +217,12 @@ def train():
             0.9999, global_step)
         variables_averages_op = variable_averages.apply(tf.trainable_variables())
 
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+
+        update_op = tf.group(update_ops)
+
         # Group all updates to into a single train op.
-        train_op = tf.group(apply_gradient_op, variables_averages_op)
+        train_op = tf.group(apply_gradient_op, variables_averages_op, update_op)
 
         # Create a saver.
         saver = tf.train.Saver(tf.global_variables())

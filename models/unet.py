@@ -3,7 +3,7 @@ from tensorflow.python.ops import variable_scope
 
 slim = tf.contrib.slim
 
-def down_layer(inputs, filters, kernel_size, has_batch_norm, has_pool, data_format):
+def down_layer(inputs, filters, kernel_size, has_batch_norm, has_pool, data_format, is_training=True):
     if data_format == "NHWC":
         channels_order = "channels_last"
     else:
@@ -11,11 +11,11 @@ def down_layer(inputs, filters, kernel_size, has_batch_norm, has_pool, data_form
 
     down = slim.conv2d(inputs, filters, kernel_size, padding="same", data_format=data_format, activation_fn=None)
     if has_batch_norm:
-        down = tf.contrib.layers.batch_norm(down, fused=True, data_format=data_format)
+        down = tf.contrib.layers.batch_norm(down, fused=True, data_format=data_format, is_training=is_training)
     down = tf.nn.relu(down)
     down = slim.conv2d(down, filters, kernel_size, padding="same", data_format=data_format, activation_fn=None)
     if has_batch_norm:
-        down = tf.contrib.layers.batch_norm(down, fused=True, data_format=data_format)
+        down = tf.contrib.layers.batch_norm(down, fused=True, data_format=data_format, is_training=is_training)
     down = tf.nn.relu(down)
     if has_pool:
         down_pool = slim.max_pool2d(down, 2, 2, padding="valid", data_format=data_format)
@@ -23,7 +23,7 @@ def down_layer(inputs, filters, kernel_size, has_batch_norm, has_pool, data_form
         down_pool = None
     return down, down_pool
 
-def up_layer(ups, downs, filters, kernel_size, output_size, has_batch_norm, data_format, up_sample_type=0):
+def up_layer(ups, downs, filters, kernel_size, output_size, has_batch_norm, data_format, up_sample_type=0, is_training=True):
     if data_format == "NHWC":
         channels_order = "channels_last"
         channel_dim = 3
@@ -40,12 +40,12 @@ def up_layer(ups, downs, filters, kernel_size, output_size, has_batch_norm, data
 
     ups = slim.conv2d(ups, filters, kernel_size, padding="same", data_format=data_format, activation_fn=None)
     if has_batch_norm:
-        ups = tf.contrib.layers.batch_norm(ups, fused=True, data_format=data_format)
+        ups = tf.contrib.layers.batch_norm(ups, fused=True, data_format=data_format, is_training=is_training)
     ups = tf.nn.relu(ups)
 
     ups = slim.conv2d(ups, filters, kernel_size, padding="same", data_format=data_format, activation_fn=None)
     if has_batch_norm:
-        ups = tf.contrib.layers.batch_norm(ups, fused=True, data_format=data_format)
+        ups = tf.contrib.layers.batch_norm(ups, fused=True, data_format=data_format, is_training=is_training)
     ups = tf.nn.relu(ups)
     return ups
 
@@ -67,106 +67,106 @@ def resize_image_and_transpose(image, size, data_format):
     return image
 
 
-def uNet(inputs, has_batch_norm, data_format):
+def uNet(inputs, has_batch_norm, data_format, is_training=True):
 
     with variable_scope.variable_scope("Unet", 'Unet', [inputs]):
 
-        down0b, down0b_pool = down_layer(inputs, 8, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down0b, down0b_pool = down_layer(inputs, 8, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format, is_training=is_training)
         # 512
 
-        down0a, down0a_pool = down_layer(down0b_pool, 16, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down0a, down0a_pool = down_layer(down0b_pool, 16, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format, is_training=is_training)
         # 256
 
-        down0, down0_pool = down_layer(down0a_pool, 32, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down0, down0_pool = down_layer(down0a_pool, 32, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format, is_training=is_training)
         # 128
 
-        down1, down1_pool = down_layer(down0_pool, 64, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down1, down1_pool = down_layer(down0_pool, 64, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format, is_training=is_training)
         # 64
 
-        down2, down2_pool = down_layer(down1_pool, 128, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down2, down2_pool = down_layer(down1_pool, 128, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format, is_training=is_training)
         # 32
 
-        down3, down3_pool = down_layer(down2_pool, 256, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down3, down3_pool = down_layer(down2_pool, 256, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format, is_training=is_training)
         # 16
 
-        down4, down4_pool = down_layer(down3_pool, 512, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down4, down4_pool = down_layer(down3_pool, 512, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format, is_training=is_training)
         # 8
 
-        center, _ = down_layer(down4_pool, 1024, 3, has_batch_norm=has_batch_norm, has_pool=False, data_format=data_format)
+        center, _ = down_layer(down4_pool, 1024, 3, has_batch_norm=has_batch_norm, has_pool=False, data_format=data_format, is_training=is_training)
         # center
 
-        up4 = up_layer(center, down4, 512, 3, [20, 30], has_batch_norm=has_batch_norm, data_format=data_format)
+        up4 = up_layer(center, down4, 512, 3, [20, 30], has_batch_norm=has_batch_norm, data_format=data_format, is_training=is_training)
         # 16
 
-        up3 = up_layer(up4, down3, 256, 3, [40, 60], has_batch_norm=has_batch_norm, data_format=data_format)
+        up3 = up_layer(up4, down3, 256, 3, [40, 60], has_batch_norm=has_batch_norm, data_format=data_format, is_training=is_training)
         # 32
 
-        up2 = up_layer(up3, down2, 128, 3, [80, 120], has_batch_norm=has_batch_norm, data_format=data_format)
+        up2 = up_layer(up3, down2, 128, 3, [80, 120], has_batch_norm=has_batch_norm, data_format=data_format, is_training=is_training)
         # 64
 
-        up1 = up_layer(up2, down1, 64, 3, [160, 240], has_batch_norm=has_batch_norm, data_format=data_format)
+        up1 = up_layer(up2, down1, 64, 3, [160, 240], has_batch_norm=has_batch_norm, data_format=data_format, is_training=is_training)
         # 128
 
-        up0 = up_layer(up1, down0, 32, 3, [320, 480], has_batch_norm=has_batch_norm, data_format=data_format)
+        up0 = up_layer(up1, down0, 32, 3, [320, 480], has_batch_norm=has_batch_norm, data_format=data_format, is_training=is_training)
         # 256
 
-        up0a = up_layer(up0, down0a, 16, 3, [640, 960], has_batch_norm=has_batch_norm, data_format=data_format)
+        up0a = up_layer(up0, down0a, 16, 3, [640, 960], has_batch_norm=has_batch_norm, data_format=data_format, is_training=is_training)
         # 512
 
-        up0b = up_layer(up0a, down0b, 8, 3, [1280, 1920], has_batch_norm=has_batch_norm, data_format=data_format)
+        up0b = up_layer(up0a, down0b, 8, 3, [1280, 1920], has_batch_norm=has_batch_norm, data_format=data_format, is_training=is_training)
         # 1024
 
         classify = slim.conv2d(up0b, 1, 1, data_format=data_format, activation_fn=None)
 
     return classify
 
-def uNet_v2(inputs, has_batch_norm, data_format):
+def uNet_v2(inputs, has_batch_norm, data_format, is_training=True):
 
     with variable_scope.variable_scope("Unet", 'Unet', [inputs]):
 
-        down0b, down0b_pool = down_layer(inputs, 8, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down0b, down0b_pool = down_layer(inputs, 8, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format, is_training=is_training)
         # 512
 
-        down0a, down0a_pool = down_layer(down0b_pool, 16, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down0a, down0a_pool = down_layer(down0b_pool, 16, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format, is_training=is_training)
         # 256
 
-        down0, down0_pool = down_layer(down0a_pool, 32, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down0, down0_pool = down_layer(down0a_pool, 32, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format, is_training=is_training)
         # 128
 
-        down1, down1_pool = down_layer(down0_pool, 64, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down1, down1_pool = down_layer(down0_pool, 64, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format, is_training=is_training)
         # 64
 
-        down2, down2_pool = down_layer(down1_pool, 128, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down2, down2_pool = down_layer(down1_pool, 128, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format, is_training=is_training)
         # 32
 
-        down3, down3_pool = down_layer(down2_pool, 256, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down3, down3_pool = down_layer(down2_pool, 256, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format, is_training=is_training)
         # 16
 
-        down4, down4_pool = down_layer(down3_pool, 512, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format)
+        down4, down4_pool = down_layer(down3_pool, 512, 3, has_batch_norm=has_batch_norm, has_pool=True, data_format=data_format, is_training=is_training)
         # 8
 
-        center, _ = down_layer(down4_pool, 1024, 3, has_batch_norm=has_batch_norm, has_pool=False, data_format=data_format)
+        center, _ = down_layer(down4_pool, 1024, 3, has_batch_norm=has_batch_norm, has_pool=False, data_format=data_format, is_training=is_training)
         # center
 
-        up4 = up_layer(center, down4, 512, 3, [20, 30], has_batch_norm=has_batch_norm, data_format=data_format, up_sample_type=1)
+        up4 = up_layer(center, down4, 512, 3, [20, 30], has_batch_norm=has_batch_norm, data_format=data_format, up_sample_type=1, is_training=is_training)
         # 16
 
-        up3 = up_layer(up4, down3, 256, 3, [40, 60], has_batch_norm=has_batch_norm, data_format=data_format, up_sample_type=1)
+        up3 = up_layer(up4, down3, 256, 3, [40, 60], has_batch_norm=has_batch_norm, data_format=data_format, up_sample_type=1, is_training=is_training)
         # 32
 
-        up2 = up_layer(up3, down2, 128, 3, [80, 120], has_batch_norm=has_batch_norm, data_format=data_format, up_sample_type=1)
+        up2 = up_layer(up3, down2, 128, 3, [80, 120], has_batch_norm=has_batch_norm, data_format=data_format, up_sample_type=1, is_training=is_training)
         # 64
 
-        up1 = up_layer(up2, down1, 64, 3, [160, 240], has_batch_norm=has_batch_norm, data_format=data_format, up_sample_type=1)
+        up1 = up_layer(up2, down1, 64, 3, [160, 240], has_batch_norm=has_batch_norm, data_format=data_format, up_sample_type=1, is_training=is_training)
         # 128
 
-        up0 = up_layer(up1, down0, 32, 3, [320, 480], has_batch_norm=has_batch_norm, data_format=data_format, up_sample_type=1)
+        up0 = up_layer(up1, down0, 32, 3, [320, 480], has_batch_norm=has_batch_norm, data_format=data_format, up_sample_type=1, is_training=is_training)
         # 256
 
-        up0a = up_layer(up0, down0a, 16, 3, [640, 960], has_batch_norm=has_batch_norm, data_format=data_format, up_sample_type=1)
+        up0a = up_layer(up0, down0a, 16, 3, [640, 960], has_batch_norm=has_batch_norm, data_format=data_format, up_sample_type=1, is_training=is_training)
         # 512
 
-        up0b = up_layer(up0a, down0b, 8, 3, [1280, 1920], has_batch_norm=has_batch_norm, data_format=data_format, up_sample_type=1)
+        up0b = up_layer(up0a, down0b, 8, 3, [1280, 1920], has_batch_norm=has_batch_norm, data_format=data_format, up_sample_type=1, is_training=is_training)
         # 1024
         if data_format == "NHWC":
             channels_order = "channels_last"

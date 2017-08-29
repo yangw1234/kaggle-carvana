@@ -95,7 +95,7 @@ def tower_loss(scope, images, masks):
     from tensorflow.python.ops import init_ops
     with tf.contrib.slim.arg_scope([tf.contrib.slim.model_variable, tf.contrib.slim.variable], device='/gpu:0'):
         with slim.arg_scope([slim.conv2d], weights_initializer=init_ops.glorot_uniform_initializer()):
-            logits = uNet_v2(image_batch, has_batch_norm=True, data_format=DATA_FORMAT)
+            logits = uNet_v2(image_batch, has_batch_norm=True, data_format=DATA_FORMAT, is_training=False)
 
     # Build the portion of the Graph calculating the losses. Note that we will
     # assemble the total_loss using a custom function below.
